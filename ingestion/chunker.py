@@ -30,10 +30,10 @@ logger = logging.getLogger(__name__)
 @dataclass
 class ChunkedDocument:
     """分块后的文档单元。"""
-    chunk_id: str           # 唯一标识（content hash）
-    page_content: str       # 子chunk内容（用于embedding和检索）
-    parent_text: str        # 父chunk内容（检索命中后喂给LLM）
-    parent_id: str          # 父chunk ID
+    chunk_id: str           
+    page_content: str       
+    parent_text: str        
+    parent_id: str          
     metadata: dict
 
     @classmethod
@@ -60,7 +60,7 @@ class AdaptiveChunker:
         self.chunk_overlap = chunk_overlap
 
     # ─────────────────────────────────────────────
-    # 策略1：Fixed分块（baseline，已废弃）
+    
     # ─────────────────────────────────────────────
     def fixed_chunk(
         self, text: str, metadata: dict = None
@@ -77,7 +77,7 @@ class AdaptiveChunker:
             chunk_text = text[start:end]
             chunks.append(ChunkedDocument.from_texts(
                 child_text=chunk_text,
-                parent_text=chunk_text,  # fixed策略子=父
+                parent_text=chunk_text,  
                 parent_id=parent_id,
                 metadata=metadata or {},
             ))
@@ -85,7 +85,7 @@ class AdaptiveChunker:
         return chunks
 
     # ─────────────────────────────────────────────
-    # 策略2：Sentence-aware分块（中间方案）
+    
     # ─────────────────────────────────────────────
     def sentence_chunk(
         self, text: str, metadata: dict = None
@@ -94,7 +94,7 @@ class AdaptiveChunker:
         按句子边界切分，避免句子被截断。
         Recall@5 = 0.74（+21% vs baseline）。
         """
-        # 按中文/英文句号、换行符分句
+        
         import re
         sentences = re.split(r'(?<=[。！？\.\!\?])\s*|\n+', text)
         sentences = [s.strip() for s in sentences if s.strip()]
@@ -113,7 +113,7 @@ class AdaptiveChunker:
                     parent_id=parent_id,
                     metadata=metadata or {},
                 ))
-                # 保留最后一句作overlap
+                
                 current = current[-1:]
                 current_len = len(current[0]) if current else 0
             current.append(sent)
@@ -130,7 +130,7 @@ class AdaptiveChunker:
         return chunks
 
     # ─────────────────────────────────────────────
-    # 策略3：Hierarchical分块（最终方案 ★）
+    
     # ─────────────────────────────────────────────
     def hierarchical_chunk(
         self,
@@ -154,7 +154,7 @@ class AdaptiveChunker:
         - 小chunk：embedding精准，但喂给LLM时缺少前后文，增加幻觉
         - Hierarchical：用小chunk检索，用大chunk生成，两全其美
         """
-        # ── 第一级：切父chunk ────────────────────────
+        
         parent_chunks = self._split_text(
             text, chunk_size=parent_chunk_size, overlap=parent_overlap
         )
@@ -165,7 +165,7 @@ class AdaptiveChunker:
                 f"{p_idx}:{parent_text[:50]}".encode()
             ).hexdigest()[:10]
 
-            # ── 第二级：在父chunk内切子chunk ──────────
+            
             child_texts = self._split_text(
                 parent_text, chunk_size=child_chunk_size, overlap=child_overlap
             )
@@ -180,7 +180,7 @@ class AdaptiveChunker:
                 }
                 chunk = ChunkedDocument.from_texts(
                     child_text=child_text,
-                    parent_text=parent_text,   # ← 关键：存储父chunk供LLM使用
+                    parent_text=parent_text,   
                     parent_id=parent_id,
                     metadata=child_meta,
                 )
@@ -193,7 +193,7 @@ class AdaptiveChunker:
         return all_child_chunks
 
     # ─────────────────────────────────────────────
-    # 通用文本切分（递归分隔符）
+    
     # ─────────────────────────────────────────────
     @staticmethod
     def _split_text(
@@ -231,7 +231,7 @@ class AdaptiveChunker:
 
         raw_chunks = split_recursive(text, separators)
 
-        # 添加overlap（相邻chunk间保留重叠内容）
+        
         for i, chunk in enumerate(raw_chunks):
             if i > 0 and overlap > 0:
                 prev = raw_chunks[i - 1]
@@ -243,7 +243,7 @@ class AdaptiveChunker:
         return chunks
 
     # ─────────────────────────────────────────────
-    # 策略分发入口
+    
     # ─────────────────────────────────────────────
     def chunk(
         self,

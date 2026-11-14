@@ -68,7 +68,7 @@ class DocumentIngester:
         if suffix in [".txt", ".md"]:
             return filepath.read_text(encoding="utf-8")
         elif suffix == ".pdf":
-            # 需要: pip install pypdf
+            
             from pypdf import PdfReader
             reader = PdfReader(str(filepath))
             return "\n\n".join(
@@ -76,7 +76,7 @@ class DocumentIngester:
                 if page.extract_text()
             )
         elif suffix in [".docx"]:
-            # 需要: pip install python-docx
+            
             from docx import Document as DocxDocument
             doc = DocxDocument(str(filepath))
             return "\n\n".join(p.text for p in doc.paragraphs if p.text.strip())
@@ -128,12 +128,12 @@ class DocumentIngester:
 
         logger.info(f"Total chunks to ingest: {len(all_chunks)}")
 
-        # 批量向量化
+        
         texts = [c.page_content for c in all_chunks]
         logger.info("Embedding chunks (batch mode)...")
         embeddings = await self.embedder.embed_documents_batch(texts, batch_size=100)
 
-        # 批量写入Qdrant
+        
         points = []
         for i, (chunk, embedding) in enumerate(zip(all_chunks, embeddings)):
             point = PointStruct(
@@ -141,7 +141,7 @@ class DocumentIngester:
                 vector=embedding,
                 payload={
                     "text": chunk.page_content,
-                    "parent_text": chunk.parent_text,      # 父chunk（Hierarchical核心）
+                    "parent_text": chunk.parent_text,      
                     "parent_id": chunk.parent_id,
                     "source": chunk.metadata.get("source", ""),
                     "filename": chunk.metadata.get("filename", ""),
@@ -151,7 +151,7 @@ class DocumentIngester:
             )
             points.append(point)
 
-            # 批量上传
+            
             if len(points) >= batch_size:
                 self.qdrant.upsert(collection_name=collection_name, points=points)
                 logger.info(f"  Uploaded {i+1}/{len(all_chunks)} chunks")
@@ -165,7 +165,7 @@ class DocumentIngester:
 
 
 # ─────────────────────────────────────────────────────
-# CLI入口
+
 # ─────────────────────────────────────────────────────
 async def main():
     parser = argparse.ArgumentParser(description="Enterprise RAG Document Ingester")
