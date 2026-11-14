@@ -1,15 +1,6 @@
-"""
-evaluation/chunking_ab_test.py
-------------------------------
-分块策略A/B对比实验脚本。
-复现简历中的实验数据：
-  Fixed 512chars → Recall@5 = 0.61 (baseline)
-  Sentence-aware → Recall@5 = 0.74 (+21%)
-  Hierarchical   → Recall@5 = 0.78 (+28%)  ← 最终选择
-
-使用方式：
-    python -m evaluation.chunking_ab_test
-"""
+"""Illustrative A/B comparison of chunking strategies using synthetic documents and
+keyword-based recall estimates. This is not a measurement of production retrieval
+quality. Run: python -m evaluation.chunking_ab_test"""
 
 import asyncio
 import logging
@@ -26,18 +17,15 @@ logging.basicConfig(level=logging.INFO)
 @dataclass
 class ChunkingExperimentResult:
     strategy: str
-    n_chunks: float           
-    avg_chunk_len: float      
-    simulated_recall: float   
-    coverage: float           
+    n_chunks: float           # Average chunks per document.
+    avg_chunk_len: float      # Average chunk length.
+    simulated_recall: float   # Simulated Recall@5.
+    coverage: float           # Content coverage estimate.
 
 
 def simulate_recall(chunks, query_keywords: list[str], k: int = 5) -> float:
-    """
-    模拟Recall@5：
-    在top-k个chunk里，检查包含query关键词的chunk数 / 总相关chunk数。
-    （真实实验需要embedding + 向量检索，此处用关键词匹配近似）
-    """
+    """Approximate Recall@K using keyword matches in the highest-ranked chunks. A real
+    retrieval evaluation requires embeddings and a vector index."""
     relevant_chunks = [
         c for c in chunks
         if any(kw.lower() in c.page_content.lower() for kw in query_keywords)
@@ -45,8 +33,8 @@ def simulate_recall(chunks, query_keywords: list[str], k: int = 5) -> float:
     if not relevant_chunks:
         return 1.0
 
-    
-    
+    # Simulate retrieval of relevant chunks.
+    # Keyword density approximates ranking.
     def keyword_density(chunk) -> float:
         text = chunk.page_content.lower()
         return sum(text.count(kw.lower()) for kw in query_keywords) / max(len(text), 1)
@@ -68,7 +56,7 @@ def run_chunking_experiment(
     strategies: list[str],
     query_keywords: list[str],
 ) -> list[ChunkingExperimentResult]:
-    """对多个分块策略运行对比实验。"""
+    """Compare multiple chunking strategies."""
     chunker = AdaptiveChunker(chunk_size=512, chunk_overlap=64)
     results = []
 
@@ -84,7 +72,7 @@ def run_chunking_experiment(
         )
         avg_n_chunks = len(all_chunks) / len(sample_texts)
 
-        
+        # Average simulated recall across documents.
         recalls = []
         for text in sample_texts:
             chunks = chunker.chunk(text, metadata={"source": "test"}, strategy=strategy)
@@ -92,13 +80,13 @@ def run_chunking_experiment(
             recalls.append(recall)
         avg_recall = sum(recalls) / len(recalls) if recalls else 0
 
-        
+        # Estimate coverage after splitting.
         original_total = sum(len(t) for t in sample_texts)
         chunked_total = sum(
             len(chunker.chunk(t, strategy=strategy, metadata={}))
             for t in sample_texts
         )
-        
+        # Approximate coverage using chunk count.
         coverage = min(1.0, avg_n_chunks / 10)
 
         results.append(ChunkingExperimentResult(
@@ -113,7 +101,7 @@ def run_chunking_experiment(
 
 
 def generate_sample_docs(n: int = 20, length: int = 3000) -> list[str]:
-    """生成模拟企业文档（含结构化段落）。"""
+    """Generate synthetic enterprise documents with structured paragraphs."""
     topics = [
         "员工手册第三章：休假制度。\n\n年假政策：入职满一年的员工享有5天带薪年假，"
         "满三年后增至10天，满十年后增至15天。员工需提前两周申请年假，"
@@ -143,7 +131,7 @@ def generate_sample_docs(n: int = 20, length: int = 3000) -> list[str]:
     docs = []
     for i in range(n):
         base = topics[i % len(topics)]
-        
+        # Randomize synthetic document length.
         padding = " ".join(
             f"附加条款{j}：相关规定参见公司内部管理制度第{random.randint(1,50)}条。"
             for j in range(length // 100)
@@ -153,7 +141,7 @@ def generate_sample_docs(n: int = 20, length: int = 3000) -> list[str]:
 
 
 def print_experiment_results(results: list[ChunkingExperimentResult]):
-    """打印对比表格。"""
+    """Print the comparison table."""
     print("\n" + "="*65)
     print("  Chunking Strategy A/B Test Results")
     print("="*65)

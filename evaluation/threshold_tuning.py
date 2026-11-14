@@ -1,17 +1,6 @@
-"""
-evaluation/threshold_tuning.py
--------------------------------
-Rerank阈值调优脚本：寻找最优 relevance_score threshold。
-复现简历中"幻觉率降低31%"的核心实验。
-
-实验设计：
-- 在100条ground-truth QA对上，网格搜索最优threshold
-- 目标：在不损失召回率的前提下最小化幻觉率
-- 结论：threshold=0.5时幻觉率最低（16% → 11%，-31%）
-
-使用方式：
-    python -m evaluation.threshold_tuning
-"""
+"""Illustrative reranking threshold sweep using a mathematical simulation. Explores recall
+and modeled hallucination risk; it does not establish measured improvements on a real QA
+dataset. Run: python -m evaluation.threshold_tuning"""
 
 import asyncio
 import logging
@@ -24,39 +13,32 @@ logging.basicConfig(level=logging.INFO)
 @dataclass
 class ThresholdResult:
     threshold: float
-    hallucination_rate: float    
-    recall_at_5: float           
-    avg_docs_returned: float     
-    f1_score: float              
+    hallucination_rate: float    # Lower is better.
+    recall_at_5: float           # Higher is better.
+    avg_docs_returned: float     # Average retained document count.
+    f1_score: float              # Combined recall and groundedness score.
 
 
 def simulate_threshold_experiment(
     thresholds: list[float],
     n_samples: int = 100,
 ) -> list[ThresholdResult]:
-    """
-    模拟不同threshold下的幻觉率和召回率变化。
-    
-    真实实验：在评估集上运行Agent，用LLM-as-judge判断每条结果
-    此处用数学模型近似，展示threshold-hallucination关系。
-    
-    模型假设：
-    - relevance_score服从Beta分布（相关文档高分，无关文档低分）
-    - 幻觉来源：低分文档混入上下文（噪声）
-    - 召回损失：高threshold过滤了部分真实相关文档
-    """
+    """Simulate recall and hallucination risk at different thresholds. A real experiment
+    requires running the agent on evaluation data and assessing its answers. This
+    approximation models higher scores for relevant documents, context noise, and recall
+    loss from filtering."""
     import math
     import random
     random.seed(42)
 
     results = []
 
-    
+    # Generate simulated candidates for 100 samples.
     samples = []
     for i in range(n_samples):
-        
+        # Higher scores for relevant documents.
         relevant_scores = [random.uniform(0.45, 0.95) for _ in range(random.randint(1, 3))]
-        
+        # Lower scores for noise.
         noise_scores = [random.uniform(0.20, 0.65) for _ in range(random.randint(2, 7))]
         all_docs = [(s, True) for s in relevant_scores] + [(s, False) for s in noise_scores]
         all_docs.sort(key=lambda x: x[0], reverse=True)
@@ -69,26 +51,26 @@ def simulate_threshold_experiment(
         total_docs_returned = []
 
         for docs in samples:
-            
+            # Apply the threshold.
             filtered = [(s, is_rel) for s, is_rel in docs if s >= threshold][:5]
             total_docs_returned.append(len(filtered))
 
-            
+            # Check whether relevant content remains.
             relevant_in_filtered = [d for d in filtered if d[1]]
             all_relevant = [d for d in docs if d[1]]
             recall = len(relevant_in_filtered) / len(all_relevant) if all_relevant else 1.0
             total_relevant_hit += recall
             total_relevant += 1
 
-            
-            
-            
+            # Modeled hallucination conditions:
+            # No relevant document increases modeled risk.
+            # A noise majority increases modeled risk.
             if not filtered:
-                
+                # Assume high risk with no documents.
                 hallucination_count += 1
             else:
                 noise_ratio = sum(1 for _, is_rel in filtered if not is_rel) / len(filtered)
-                
+                # Approximate risk from noise fraction.
                 hallucination_prob = 1 / (1 + math.exp(-6 * (noise_ratio - 0.4)))
                 if random.random() < hallucination_prob:
                     hallucination_count += 1
@@ -97,7 +79,7 @@ def simulate_threshold_experiment(
         avg_recall = total_relevant_hit / total_relevant
         avg_docs = sum(total_docs_returned) / len(total_docs_returned)
 
-        
+        # Balance groundedness with recall.
         precision_proxy = 1 - hallucination_rate
         f1 = 2 * precision_proxy * avg_recall / (precision_proxy + avg_recall + 1e-9)
 
@@ -113,7 +95,7 @@ def simulate_threshold_experiment(
 
 
 def print_threshold_results(results: list[ThresholdResult]):
-    """打印threshold调优结果表格。"""
+    """Print threshold tuning results."""
     print("\n" + "="*75)
     print("  Rerank Threshold Tuning Results (n=100 eval samples)")
     print("="*75)
@@ -121,7 +103,7 @@ def print_threshold_results(results: list[ThresholdResult]):
           f"{'Avg Docs':>10} {'F1 Score':>10}")
     print("-"*75)
 
-    
+    # Select the highest combined score.
     best = max(results, key=lambda r: r.f1_score)
 
     for r in results:
@@ -132,7 +114,7 @@ def print_threshold_results(results: list[ThresholdResult]):
 
     print("="*75)
 
-    
+    # Compare with the unfiltered baseline.
     baseline = results[0]
     best_result = results[results.index(best)]
     improvement = (baseline.hallucination_rate - best_result.hallucination_rate)

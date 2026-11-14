@@ -1,17 +1,7 @@
-"""
-evaluation/latency_benchmark.py
---------------------------------
-延迟优化对比基准测试：串行 vs 并行检索架构。
-复现简历中"延迟降低20%"的实验数据。
-
-实验设计：
-- 用asyncio模拟串行 vs 并行两种编排方式
-- 模拟真实API调用延迟（embedding ~100ms, BM25 ~60ms, rerank ~150ms）
-- 统计P50/P95/P99延迟，验证20%降幅
-
-使用方式：
-    python -m evaluation.latency_benchmark
-"""
+"""Simulated latency comparison of sequential and parallel RAG orchestration. Uses asyncio
+delays to model API stages and reports P50/P95/P99. Results illustrate model
+assumptions, not measured service performance. Run: python -m
+evaluation.latency_benchmark"""
 
 import asyncio
 import logging
@@ -36,120 +26,112 @@ class BenchmarkResult:
 
 
 # ─────────────────────────────────────────────────────
-
+# Simulated API stage latency.
 # ─────────────────────────────────────────────────────
 
 async def mock_embedding_api(query: str) -> list[float]:
-    """模拟OpenAI Embedding API延迟（~80-130ms）。"""
+    """Simulate embedding API latency of approximately 80 to 130 ms."""
     await asyncio.sleep(random.uniform(0.080, 0.130))
-    return [0.1] * 1536  
+    return [0.1] * 1536  # Simulated vector.
 
 async def mock_bm25_search(query: str) -> list[str]:
-    """模拟BM25关键词检索延迟（~40-80ms）。"""
+    """Simulate keyword retrieval latency of approximately 40 to 80 ms."""
     await asyncio.sleep(random.uniform(0.040, 0.080))
     return [f"doc_{i}" for i in range(10)]
 
 async def mock_qdrant_search(vector: list) -> list[str]:
-    """模拟Qdrant向量检索延迟（~30-60ms，与embedding并行）。"""
+    """Simulate vector retrieval latency of approximately 30 to 60 ms."""
     await asyncio.sleep(random.uniform(0.030, 0.060))
     return [f"vec_doc_{i}" for i in range(10)]
 
 async def mock_rerank_api(query: str, docs: list) -> list[str]:
-    """模拟Cohere Rerank API延迟（~120-200ms）。"""
+    """Simulate reranking latency of approximately 120 to 200 ms."""
     await asyncio.sleep(random.uniform(0.120, 0.200))
     return docs[:5]
 
 async def mock_llm_generate(messages: list) -> str:
-    """模拟LLM生成延迟（~800-1400ms，最大瓶颈）。"""
+    """Simulate LLM generation latency of approximately 800 to 1400 ms."""
     await asyncio.sleep(random.uniform(0.800, 1.400))
     return "模拟答案内容"
 
 
 # ─────────────────────────────────────────────────────
-
+# Sequential baseline.
 # ─────────────────────────────────────────────────────
 
 async def serial_pipeline(query: str) -> float:
-    """
-    串行RAG流水线（优化前）：
-    Embed → Qdrant → BM25 → Rerank → LLM
-    总延迟 = 各阶段之和
-    """
+    """Sequential baseline: Embed -> Qdrant -> BM25 -> Rerank -> LLM. Stage latencies
+    accumulate."""
     t0 = time.perf_counter()
 
-    
+    # Step 1: embedding.
     vector = await mock_embedding_api(query)
 
-    
+    # Step 2: vector retrieval.
     dense_docs = await mock_qdrant_search(vector)
 
-    
+    # Step 3: keyword retrieval.
     sparse_docs = await mock_bm25_search(query)
 
     # Step 4: Rerank
     merged = list(set(dense_docs + sparse_docs))
     reranked = await mock_rerank_api(query, merged)
 
-    
+    # Step 5: generation.
     answer = await mock_llm_generate([{"role": "user", "content": query}])
 
     return (time.perf_counter() - t0) * 1000
 
 
 # ─────────────────────────────────────────────────────
-
+# Parallel and cached variant.
 # ─────────────────────────────────────────────────────
 
 async def parallel_pipeline(query: str, cache_hit: bool = False) -> float:
-    """
-    并行RAG流水线（优化后）：
-    [Embed + BM25] 并行 → Rerank → LLM
-    优化：Embedding和BM25并行，节省~60ms
-
-    cache_hit=True：模拟Redis缓存命中场景（30%概率）
-    """
+    """Run embedding and BM25 concurrently, then retrieve vectors, rerank, and generate.
+    cache_hit simulates a cached response."""
     t0 = time.perf_counter()
 
-    
+    # Simulate a fast cache hit.
     if cache_hit:
         await asyncio.sleep(0.003)  # Redis GET ~3ms
         return (time.perf_counter() - t0) * 1000
 
-    
+    # Parallel embedding and BM25.
     embed_task = asyncio.create_task(mock_embedding_api(query))
     bm25_task = asyncio.create_task(mock_bm25_search(query))
     vector, sparse_docs = await asyncio.gather(embed_task, bm25_task)
 
-    
+    # Retrieve using the embedding result.
     dense_docs = await mock_qdrant_search(vector)
 
     # Step 3: Rerank
     merged = list(set(dense_docs + sparse_docs))
     reranked = await mock_rerank_api(query, merged)
 
-    
+    # Simulate generation with connection reuse.
     answer = await mock_llm_generate([{"role": "user", "content": query}])
 
     return (time.perf_counter() - t0) * 1000
 
 
 # ─────────────────────────────────────────────────────
-
+# Benchmark entry point.
 # ─────────────────────────────────────────────────────
 
 async def run_benchmark(
     n_requests: int = 200,
-    cache_hit_rate: float = 0.30,  
+    cache_hit_rate: float = 0.30,  # Assume a 30 percent cache hit rate.
 ) -> tuple[BenchmarkResult, BenchmarkResult]:
-    """运行串行 vs 并行对比测试。"""
+    """Compare sequential and parallel orchestration."""
     queries = [f"测试查询{i}：关于公司政策的问题" for i in range(n_requests)]
 
-    
+    # Sequential test.
     print(f"Running serial pipeline ({n_requests} requests)...")
     serial_tasks = [serial_pipeline(q) for q in queries]
     serial_latencies = await asyncio.gather(*serial_tasks)
 
-    
+    # Parallel and cached test.
     print(f"Running parallel+cache pipeline ({n_requests} requests, "
           f"cache_hit_rate={cache_hit_rate:.0%})...")
     import random
@@ -159,7 +141,7 @@ async def run_benchmark(
     ]
     parallel_latencies = await asyncio.gather(*parallel_tasks)
 
-    
+    # Statistics.
     def stats(latencies, name) -> BenchmarkResult:
         arr = np.array(latencies)
         return BenchmarkResult(
@@ -173,7 +155,7 @@ async def run_benchmark(
     serial_result = stats(serial_latencies, "Serial (baseline)")
     parallel_result = stats(parallel_latencies, "Parallel + Cache (optimized)")
 
-    
+    # Relative improvement.
     improvement = (serial_result.p50_ms - parallel_result.p50_ms) / serial_result.p50_ms * 100
     parallel_result.improvement_pct = round(improvement, 1)
 
@@ -181,7 +163,7 @@ async def run_benchmark(
 
 
 def print_benchmark_results(serial: BenchmarkResult, parallel: BenchmarkResult):
-    """打印对比表格。"""
+    """Print the comparison table."""
     print("\n" + "="*65)
     print("  Latency Optimization Benchmark")
     print("="*65)
