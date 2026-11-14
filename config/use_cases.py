@@ -16,45 +16,45 @@ class AgentConfig:
     每个enterprise use case对应一个AgentConfig实例，
     共用同一套RAG + LLM框架，通过配置驱动差异化行为。
     """
-    # 场景标识
+    
     use_case: str
 
-    # 检索参数
-    top_k: int = 5                     # 最终返回的文档数
-    candidate_k: int = 20              # 粗排候选数（Stage 1）
-    rerank: bool = True                # 是否启用Cohere精排
-    score_threshold: float = 0.5       # rerank相关性阈值（过滤幻觉关键参数）
-    hybrid_search: bool = True         # 是否启用 dense + sparse 混合检索
+    
+    top_k: int = 5                     
+    candidate_k: int = 20              
+    rerank: bool = True                
+    score_threshold: float = 0.5       
+    hybrid_search: bool = True         
 
-    # 分块参数（影响ingestion时的文档处理）
+    
     chunk_size: int = 512
     chunk_overlap: int = 64
     use_hierarchical_chunking: bool = True
 
-    # Embedding参数
+    
     embedding_model: str = "text-embedding-3-large"
-    use_hyde: bool = True              # HyDE查询扩展（提升向量语义匹配）
+    use_hyde: bool = True              
     hyde_max_tokens: int = 150
 
-    # LLM参数
+    
     llm_model: str = "gpt-4o-mini"
     max_tokens: int = 1024
-    temperature: float = 0.1           # 企业场景偏低温度，减少随机性
+    temperature: float = 0.1           
     stream: bool = True
 
-    # 缓存参数
-    cache_ttl: int = 300               # Redis缓存TTL（秒）
+    
+    cache_ttl: int = 300               
     cache_enabled: bool = True
 
-    # System Prompt（业务场景差异化核心）
+    
     system_prompt: str = ""
 
-    # 元数据过滤字段（多租户隔离）
+    
     tenant_filter_field: str = "tenant_id"
 
 
 # ─────────────────────────────────────────────
-# 3个Enterprise Use Case 配置
+
 # ─────────────────────────────────────────────
 
 KB_QA_CONFIG = AgentConfig(
@@ -68,7 +68,7 @@ KB_QA_CONFIG = AgentConfig(
     chunk_overlap=64,
     use_hierarchical_chunking=True,
     use_hyde=True,
-    cache_ttl=600,          # 知识库内容变更慢，缓存久一些
+    cache_ttl=600,          
     system_prompt=(
         "你是企业内部知识库智能助手。"
         "请严格基于以下检索到的文档内容回答问题，"
@@ -83,14 +83,14 @@ HELPDESK_CONFIG = AgentConfig(
     top_k=3,
     candidate_k=15,
     rerank=True,
-    score_threshold=0.55,   # 客服场景要求更高精度
+    score_threshold=0.55,   
     hybrid_search=True,
-    chunk_size=256,          # 工单场景片段更短，召回更精准
+    chunk_size=256,          
     chunk_overlap=32,
     use_hierarchical_chunking=False,
-    use_hyde=False,          # 客服查询意图明确，HyDE收益小
-    cache_ttl=180,           # 工单场景时效性强，缓存短
-    max_tokens=512,          # 客服回答要简洁
+    use_hyde=False,          
+    cache_ttl=180,           
+    max_tokens=512,          
     system_prompt=(
         "你是智能客服辅助系统，帮助客服人员快速定位解决方案。"
         "请给出简洁、可操作的步骤，优先引用历史成功案例。"
@@ -103,16 +103,16 @@ COMPLIANCE_CONFIG = AgentConfig(
     use_case="compliance",
     top_k=8,
     candidate_k=25,
-    rerank=False,            # 合规场景需要广覆盖，不做精排截断
-    score_threshold=0.4,     # 低阈值确保不遗漏风险条款
+    rerank=False,            
+    score_threshold=0.4,     
     hybrid_search=True,
-    chunk_size=1024,         # 合规文本上下文长，大chunk保留完整语义
+    chunk_size=1024,         
     chunk_overlap=128,
     use_hierarchical_chunking=True,
     use_hyde=True,
-    cache_ttl=3600,          # 法规文件稳定，长缓存
+    cache_ttl=3600,          
     max_tokens=2048,
-    temperature=0.0,         # 合规场景必须确定性输出
+    temperature=0.0,         
     system_prompt=(
         "你是企业合规审查助手。"
         "请逐条分析以下文档中的潜在合规风险，"
@@ -122,7 +122,7 @@ COMPLIANCE_CONFIG = AgentConfig(
     ),
 )
 
-# 注册表：use_case -> config
+
 USE_CASE_REGISTRY: dict[str, AgentConfig] = {
     "kb_qa":       KB_QA_CONFIG,
     "helpdesk":    HELPDESK_CONFIG,
