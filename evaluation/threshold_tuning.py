@@ -24,10 +24,10 @@ logging.basicConfig(level=logging.INFO)
 @dataclass
 class ThresholdResult:
     threshold: float
-    hallucination_rate: float    # 幻觉率（越低越好）
-    recall_at_5: float           # 召回率（越高越好）
-    avg_docs_returned: float     # 平均返回文档数（太低说明过度过滤）
-    f1_score: float              # 综合指标（幻觉抑制 + 召回平衡）
+    hallucination_rate: float    
+    recall_at_5: float           
+    avg_docs_returned: float     
+    f1_score: float              
 
 
 def simulate_threshold_experiment(
@@ -51,12 +51,12 @@ def simulate_threshold_experiment(
 
     results = []
 
-    # 模拟100个样本的检索结果（每个样本有candidate文档和对应分数）
+    
     samples = []
     for i in range(n_samples):
-        # 相关文档：分数较高（0.4-0.95）
+        
         relevant_scores = [random.uniform(0.45, 0.95) for _ in range(random.randint(1, 3))]
-        # 噪声文档：分数较低（0.2-0.65）
+        
         noise_scores = [random.uniform(0.20, 0.65) for _ in range(random.randint(2, 7))]
         all_docs = [(s, True) for s in relevant_scores] + [(s, False) for s in noise_scores]
         all_docs.sort(key=lambda x: x[0], reverse=True)
@@ -69,26 +69,26 @@ def simulate_threshold_experiment(
         total_docs_returned = []
 
         for docs in samples:
-            # 过滤低于threshold的文档
+            
             filtered = [(s, is_rel) for s, is_rel in docs if s >= threshold][:5]
             total_docs_returned.append(len(filtered))
 
-            # 召回：有没有相关文档
+            
             relevant_in_filtered = [d for d in filtered if d[1]]
             all_relevant = [d for d in docs if d[1]]
             recall = len(relevant_in_filtered) / len(all_relevant) if all_relevant else 1.0
             total_relevant_hit += recall
             total_relevant += 1
 
-            # 幻觉判断：
-            # 1. 没有相关文档（LLM只能编造）
-            # 2. 噪声文档比例过高（超过50%，引入混淆）
+            
+            
+            
             if not filtered:
-                # 无文档：LLM高概率幻觉
+                
                 hallucination_count += 1
             else:
                 noise_ratio = sum(1 for _, is_rel in filtered if not is_rel) / len(filtered)
-                # 噪声比例越高，幻觉概率越高（sigmoid函数近似）
+                
                 hallucination_prob = 1 / (1 + math.exp(-6 * (noise_ratio - 0.4)))
                 if random.random() < hallucination_prob:
                     hallucination_count += 1
@@ -97,7 +97,7 @@ def simulate_threshold_experiment(
         avg_recall = total_relevant_hit / total_relevant
         avg_docs = sum(total_docs_returned) / len(total_docs_returned)
 
-        # F1: 平衡幻觉抑制（1-hallucination_rate）和召回率
+        
         precision_proxy = 1 - hallucination_rate
         f1 = 2 * precision_proxy * avg_recall / (precision_proxy + avg_recall + 1e-9)
 
@@ -121,7 +121,7 @@ def print_threshold_results(results: list[ThresholdResult]):
           f"{'Avg Docs':>10} {'F1 Score':>10}")
     print("-"*75)
 
-    # 找最优threshold（F1最高）
+    
     best = max(results, key=lambda r: r.f1_score)
 
     for r in results:
@@ -132,7 +132,7 @@ def print_threshold_results(results: list[ThresholdResult]):
 
     print("="*75)
 
-    # 计算改善幅度（baseline = threshold=0.0，即不过滤）
+    
     baseline = results[0]
     best_result = results[results.index(best)]
     improvement = (baseline.hallucination_rate - best_result.hallucination_rate)

@@ -36,7 +36,7 @@ class EvalSample:
     """单条评估样本（ground-truth QA pair）。"""
     query: str
     ground_truth_answer: str
-    relevant_doc_ids: list[str]       # 相关文档ID列表
+    relevant_doc_ids: list[str]       
     tenant_id: str = "eval_tenant"
     use_case: str = "kb_qa"
 
@@ -49,8 +49,8 @@ class EvalResult:
     retrieved_doc_ids: list[str]
     recall_at_5: float
     mrr_at_5: float
-    is_hallucination: bool            # True = 答案无文档支撑
-    answer_relevance_score: float     # 0-1，LLM-as-judge评分
+    is_hallucination: bool            
+    answer_relevance_score: float     
     latency_ms: int
 
 
@@ -61,7 +61,7 @@ class EvalReport:
     recall_at_5: float
     mrr_at_5: float
     ndcg_at_5: float
-    hallucination_rate: float         # 幻觉率 = 幻觉样本数 / 总样本数
+    hallucination_rate: float         
     avg_answer_relevance: float
     avg_latency_ms: float
     p95_latency_ms: float
@@ -84,12 +84,12 @@ class RAGEvaluator:
         self.judge = AsyncOpenAI(api_key=openai_api_key)
 
     # ─────────────────────────────────────────
-    # 主评估入口
+    
     # ─────────────────────────────────────────
     async def run_eval(
         self,
         dataset: list[EvalSample],
-        concurrency: int = 5,  # 并发评估数（避免Rate Limit）
+        concurrency: int = 5,  
     ) -> EvalReport:
         """
         对整个测试集运行评估。
@@ -114,7 +114,7 @@ class RAGEvaluator:
             import time
             t0 = time.perf_counter()
 
-            # 运行Agent
+            
             response = await self.agent.run(sample.query, sample.tenant_id)
             latency_ms = int((time.perf_counter() - t0) * 1000)
 
@@ -126,11 +126,11 @@ class RAGEvaluator:
                 s.get("content", "") for s in response.get("sources", [])
             ]
 
-            # 检索指标
+            
             recall = self._recall_at_k(retrieved_ids, sample.relevant_doc_ids, k=5)
             mrr = self._mrr_at_k(retrieved_ids, sample.relevant_doc_ids, k=5)
 
-            # 并行评估：幻觉检测 + 答案相关性
+            
             hallucination_task = asyncio.create_task(
                 self._judge_hallucination(
                     sample.query, predicted_answer, context_texts
@@ -155,7 +155,7 @@ class RAGEvaluator:
             )
 
     # ─────────────────────────────────────────
-    # LLM-as-Judge：幻觉检测
+    
     # ─────────────────────────────────────────
     async def _judge_hallucination(
         self,
@@ -195,7 +195,7 @@ class RAGEvaluator:
         return "HALLUCINATION" in verdict
 
     # ─────────────────────────────────────────
-    # LLM-as-Judge：答案相关性评分
+    
     # ─────────────────────────────────────────
     async def _judge_relevance(self, query: str, answer: str) -> float:
         """
@@ -227,10 +227,10 @@ class RAGEvaluator:
             score = float(score_str) / 10.0
             return max(0.0, min(1.0, score))
         except (ValueError, Exception):
-            return 0.5  # 解析失败时返回中性分
+            return 0.5  
 
     # ─────────────────────────────────────────
-    # 检索指标计算
+    
     # ─────────────────────────────────────────
     @staticmethod
     def _recall_at_k(
@@ -255,7 +255,7 @@ class RAGEvaluator:
         return 0.0
 
     # ─────────────────────────────────────────
-    # 汇总报告
+    
     # ─────────────────────────────────────────
     @staticmethod
     def _aggregate(results: list[EvalResult]) -> EvalReport:
@@ -267,7 +267,7 @@ class RAGEvaluator:
             n_samples=len(results),
             recall_at_5=round(np.mean([r.recall_at_5 for r in results]), 4),
             mrr_at_5=round(np.mean([r.mrr_at_5 for r in results]), 4),
-            ndcg_at_5=round(np.mean([r.recall_at_5 for r in results]), 4),  # 简化近似
+            ndcg_at_5=round(np.mean([r.recall_at_5 for r in results]), 4),  
             hallucination_rate=round(
                 sum(r.is_hallucination for r in results) / len(results), 4
             ),

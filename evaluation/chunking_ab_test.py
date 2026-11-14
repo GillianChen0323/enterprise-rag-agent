@@ -26,10 +26,10 @@ logging.basicConfig(level=logging.INFO)
 @dataclass
 class ChunkingExperimentResult:
     strategy: str
-    n_chunks: float           # 平均chunk数（每文档）
-    avg_chunk_len: float      # 平均chunk长度
-    simulated_recall: float   # 模拟Recall@5（基于chunk粒度估算）
-    coverage: float           # 内容覆盖率（无信息丢失比例）
+    n_chunks: float           
+    avg_chunk_len: float      
+    simulated_recall: float   
+    coverage: float           
 
 
 def simulate_recall(chunks, query_keywords: list[str], k: int = 5) -> float:
@@ -45,8 +45,8 @@ def simulate_recall(chunks, query_keywords: list[str], k: int = 5) -> float:
     if not relevant_chunks:
         return 1.0
 
-    # 模拟：假设向量检索能找到内容最相关的chunk
-    # 关键词密度越高的chunk，向量检索排名越靠前
+    
+    
     def keyword_density(chunk) -> float:
         text = chunk.page_content.lower()
         return sum(text.count(kw.lower()) for kw in query_keywords) / max(len(text), 1)
@@ -84,7 +84,7 @@ def run_chunking_experiment(
         )
         avg_n_chunks = len(all_chunks) / len(sample_texts)
 
-        # 计算模拟Recall（每个文档独立计算后平均）
+        
         recalls = []
         for text in sample_texts:
             chunks = chunker.chunk(text, metadata={"source": "test"}, strategy=strategy)
@@ -92,13 +92,13 @@ def run_chunking_experiment(
             recalls.append(recall)
         avg_recall = sum(recalls) / len(recalls) if recalls else 0
 
-        # 覆盖率：检查分块后内容是否完整（无截断丢失）
+        
         original_total = sum(len(t) for t in sample_texts)
         chunked_total = sum(
             len(chunker.chunk(t, strategy=strategy, metadata={}))
             for t in sample_texts
         )
-        # 简化：chunk数量越多，覆盖率越完整（近似）
+        
         coverage = min(1.0, avg_n_chunks / 10)
 
         results.append(ChunkingExperimentResult(
@@ -143,7 +143,7 @@ def generate_sample_docs(n: int = 20, length: int = 3000) -> list[str]:
     docs = []
     for i in range(n):
         base = topics[i % len(topics)]
-        # 加入一些随机内容模拟文档长度
+        
         padding = " ".join(
             f"附加条款{j}：相关规定参见公司内部管理制度第{random.randint(1,50)}条。"
             for j in range(length // 100)

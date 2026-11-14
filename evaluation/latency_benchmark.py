@@ -36,13 +36,13 @@ class BenchmarkResult:
 
 
 # ─────────────────────────────────────────────────────
-# 模拟各阶段延迟（基于真实API观测值）
+
 # ─────────────────────────────────────────────────────
 
 async def mock_embedding_api(query: str) -> list[float]:
     """模拟OpenAI Embedding API延迟（~80-130ms）。"""
     await asyncio.sleep(random.uniform(0.080, 0.130))
-    return [0.1] * 1536  # 模拟返回向量
+    return [0.1] * 1536  
 
 async def mock_bm25_search(query: str) -> list[str]:
     """模拟BM25关键词检索延迟（~40-80ms）。"""
@@ -66,7 +66,7 @@ async def mock_llm_generate(messages: list) -> str:
 
 
 # ─────────────────────────────────────────────────────
-# 方案A：串行编排（优化前 baseline）
+
 # ─────────────────────────────────────────────────────
 
 async def serial_pipeline(query: str) -> float:
@@ -77,27 +77,27 @@ async def serial_pipeline(query: str) -> float:
     """
     t0 = time.perf_counter()
 
-    # Step 1: Embedding（串行）
+    
     vector = await mock_embedding_api(query)
 
-    # Step 2: Qdrant向量检索（串行）
+    
     dense_docs = await mock_qdrant_search(vector)
 
-    # Step 3: BM25关键词检索（串行！这里是浪费）
+    
     sparse_docs = await mock_bm25_search(query)
 
     # Step 4: Rerank
     merged = list(set(dense_docs + sparse_docs))
     reranked = await mock_rerank_api(query, merged)
 
-    # Step 5: LLM生成
+    
     answer = await mock_llm_generate([{"role": "user", "content": query}])
 
     return (time.perf_counter() - t0) * 1000
 
 
 # ─────────────────────────────────────────────────────
-# 方案B：并行编排 + 缓存（优化后）
+
 # ─────────────────────────────────────────────────────
 
 async def parallel_pipeline(query: str, cache_hit: bool = False) -> float:
@@ -110,46 +110,46 @@ async def parallel_pipeline(query: str, cache_hit: bool = False) -> float:
     """
     t0 = time.perf_counter()
 
-    # 缓存命中：直接返回（<5ms Redis读取）
+    
     if cache_hit:
         await asyncio.sleep(0.003)  # Redis GET ~3ms
         return (time.perf_counter() - t0) * 1000
 
-    # Step 1: 并行执行 Embedding + BM25（关键优化）
+    
     embed_task = asyncio.create_task(mock_embedding_api(query))
     bm25_task = asyncio.create_task(mock_bm25_search(query))
     vector, sparse_docs = await asyncio.gather(embed_task, bm25_task)
 
-    # Step 2: Qdrant向量检索（基于embedding结果）
+    
     dense_docs = await mock_qdrant_search(vector)
 
     # Step 3: Rerank
     merged = list(set(dense_docs + sparse_docs))
     reranked = await mock_rerank_api(query, merged)
 
-    # Step 4: LLM生成（使用连接池，TCP握手延迟消除）
+    
     answer = await mock_llm_generate([{"role": "user", "content": query}])
 
     return (time.perf_counter() - t0) * 1000
 
 
 # ─────────────────────────────────────────────────────
-# 基准测试主函数
+
 # ─────────────────────────────────────────────────────
 
 async def run_benchmark(
     n_requests: int = 200,
-    cache_hit_rate: float = 0.30,  # 30%缓存命中率（企业场景实测值）
+    cache_hit_rate: float = 0.30,  
 ) -> tuple[BenchmarkResult, BenchmarkResult]:
     """运行串行 vs 并行对比测试。"""
     queries = [f"测试查询{i}：关于公司政策的问题" for i in range(n_requests)]
 
-    # ── 串行测试 ────────────────────────────────────
+    
     print(f"Running serial pipeline ({n_requests} requests)...")
     serial_tasks = [serial_pipeline(q) for q in queries]
     serial_latencies = await asyncio.gather(*serial_tasks)
 
-    # ── 并行+缓存测试 ────────────────────────────────
+    
     print(f"Running parallel+cache pipeline ({n_requests} requests, "
           f"cache_hit_rate={cache_hit_rate:.0%})...")
     import random
@@ -159,7 +159,7 @@ async def run_benchmark(
     ]
     parallel_latencies = await asyncio.gather(*parallel_tasks)
 
-    # ── 统计 ────────────────────────────────────────
+    
     def stats(latencies, name) -> BenchmarkResult:
         arr = np.array(latencies)
         return BenchmarkResult(
@@ -173,7 +173,7 @@ async def run_benchmark(
     serial_result = stats(serial_latencies, "Serial (baseline)")
     parallel_result = stats(parallel_latencies, "Parallel + Cache (optimized)")
 
-    # 计算改善幅度
+    
     improvement = (serial_result.p50_ms - parallel_result.p50_ms) / serial_result.p50_ms * 100
     parallel_result.improvement_pct = round(improvement, 1)
 
