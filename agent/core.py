@@ -1,8 +1,8 @@
 """
 agent/core.py
 -------------
-EnterpriseRAGAgent：核心Agent类，串联检索→生成全流程。
-对应简历：production-ready LLM-based agent with RAG retrieval pipelines
+EnterpriseRAGAgent: the core agent connecting retrieval and generation.
+Architecture: an LLM-based agent with RAG retrieval pipelines.
 """
 
 import time
@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 
 class Document:
-    """简化的文档数据类（实际项目中来自LangChain或自定义）"""
+    """Lightweight document container; can be replaced with a LangChain or custom document type."""
     def __init__(self, page_content: str, metadata: dict = None):
         self.page_content = page_content
         self.metadata = metadata or {}
@@ -23,19 +23,19 @@ class Document:
 
 class EnterpriseRAGAgent:
     """
-    生产级RAG Agent。
-    - 支持多租户隔离（tenant_id过滤）
-    - 支持流式输出（stream=True）
-    - 集成语义缓存、检索流水线、LLM生成
-    - 通过AgentConfig实现configurable business logic
+    RAG agent integrating retrieval and generation.
+    - Supports tenant-based filtering using tenant_id.
+    - Supports streaming output.
+    - Integrates semantic caching, a retrieval pipeline, and LLM generation.
+    - Uses AgentConfig for configurable business logic.
     """
 
     def __init__(
         self,
         config: AgentConfig,
-        retriever,       
-        llm_client,      
-        cache,           
+        retriever,       # OptimizedRAGPipeline instance
+        llm_client,      # LLMClient instance
+        cache,           # SemanticCache instance
     ):
         self.config = config
         self.retriever = retriever
@@ -43,23 +43,23 @@ class EnterpriseRAGAgent:
         self.cache = cache
 
     # ─────────────────────────────────────────
-    
+    # Non-streaming entry point
     # ─────────────────────────────────────────
     async def run(self, query: str, tenant_id: str) -> dict:
         """
-        完整RAG流程：缓存检查 → 检索 → 生成 → 缓存写入。
-        返回: {answer, sources, latency_ms, from_cache}
+        Full RAG flow: cache lookup -> retrieval -> generation -> cache write.
+        Returns: {answer, sources, latency_ms, from_cache}
         """
         t0 = time.perf_counter()
 
-        
+        # Step 1: Check the cache and return cached results when available.
         if self.config.cache_enabled:
             cached = await self.cache.get(query, self.config.use_case, tenant_id)
             if cached:
                 logger.info(f"[{self.config.use_case}] Cache hit | query={query[:50]}")
                 return {**cached, "from_cache": True, "latency_ms": 0}
 
-        
+        # Step 2: RAG retrieval
         docs = await self.retriever.retrieve(
             query=query,
             tenant_id=tenant_id,
@@ -71,7 +71,7 @@ class EnterpriseRAGAgent:
         )
         logger.info(f"[{self.config.use_case}] Retrieved {len(docs)} docs")
 
-        
+        # Step 3: Build the prompt context
         context = self._build_context(docs)
         system_prompt = self.config.system_prompt.format(context=context)
         messages = [
@@ -79,7 +79,7 @@ class EnterpriseRAGAgent:
             {"role": "user", "content": query},
         ]
 
-        
+        # Step 4: Generate the response without streaming
         answer = await self.llm.generate(
             messages=messages,
             model=self.config.llm_model,
@@ -98,7 +98,7 @@ class EnterpriseRAGAgent:
             "from_cache": False,
         }
 
-        
+        # Step 5: Write the result to the cache
         if self.config.cache_enabled:
             await self.cache.set(
                 query, self.config.use_case, tenant_id,
@@ -108,16 +108,16 @@ class EnterpriseRAGAgent:
         return result
 
     # ─────────────────────────────────────────
-    
+    # Streaming entry point (Server-Sent Events)
     # ─────────────────────────────────────────
     async def run_stream(
         self, query: str, tenant_id: str
     ) -> AsyncIterator[str]:
         """
-        流式RAG：检索完成后开始流式生成，首token延迟<500ms。
-        使用方式：async for token in agent.run_stream(query, tenant_id)
+        Streaming RAG: start streaming generation after retrieval completes.
+        Usage: async for token in agent.run_stream(query, tenant_id)
         """
-        
+        # Retrieve documents before streaming, as above.
         docs = await self.retriever.retrieve(
             query=query,
             tenant_id=tenant_id,
@@ -135,7 +135,7 @@ class EnterpriseRAGAgent:
             {"role": "user", "content": query},
         ]
 
-        
+        # Stream the LLM response
         async for token in self.llm.stream_generate(
             messages=messages,
             model=self.config.llm_model,
@@ -145,12 +145,12 @@ class EnterpriseRAGAgent:
             yield token
 
     # ─────────────────────────────────────────
-    
+    # Helper methods
     # ─────────────────────────────────────────
     def _build_context(self, docs: list[Document]) -> str:
         """
-        将检索到的文档列表拼接成结构化上下文字符串。
-        Hierarchical chunking场景下，这里返回的是父chunk内容（更完整）。
+        Combine retrieved documents into a structured context string.
+        With hierarchical chunking, use parent chunk content for broader context.
         """
         if not docs:
             return "（未检索到相关文档）"
@@ -163,7 +163,7 @@ class EnterpriseRAGAgent:
         return "\n\n---\n\n".join(parts)
 
     def _format_sources(self, docs: list[Document]) -> list[dict]:
-        """返回结构化的来源列表，供前端渲染引用角标。"""
+        """Return structured sources for rendering citations in the frontend."""
         return [
             {
                 "index": i + 1,

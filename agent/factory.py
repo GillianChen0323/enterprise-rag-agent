@@ -1,8 +1,8 @@
 """
 agent/factory.py
 ----------------
-AgentFactory：依赖注入工厂，根据use_case组装Agent实例。
-生产环境中使用单例模式复用连接池，避免重复创建客户端。
+AgentFactory: dependency-injection factory that assembles agents by use_case.
+Reuse cached clients and connection pools instead of recreating them.
 """
 
 import os
@@ -17,7 +17,7 @@ from llm.client import LLMClient
 
 
 # ─────────────────────────────────────────────
-
+# Shared cached components to avoid recreating connection pools
 # ─────────────────────────────────────────────
 
 @lru_cache(maxsize=1)
@@ -52,13 +52,13 @@ def get_shared_reranker() -> TwoStageRetriever:
 
 
 # ─────────────────────────────────────────────
-
+# Agent factory
 # ─────────────────────────────────────────────
 
 class AgentFactory:
     """
-    根据use_case字符串组装完整的EnterpriseRAGAgent。
-    所有底层客户端使用单例，只有AgentConfig和Pipeline按场景实例化。
+    Assemble an EnterpriseRAGAgent from a use_case string.
+    Share underlying clients; instantiate AgentConfig and Pipeline per use case.
     """
 
     @staticmethod
@@ -68,14 +68,14 @@ class AgentFactory:
         """
         config: AgentConfig = get_config(use_case)
 
-        
+        # Connect to Qdrant; each use case has a separate collection.
         from qdrant_client import QdrantClient
         qdrant_client = QdrantClient(
             url=qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
         )
         collection_name = f"enterprise_{use_case}"
 
-        
+        # Retrieval pipeline containing the embedder and reranker
         pipeline = OptimizedRAGPipeline(
             qdrant_client=qdrant_client,
             collection_name=collection_name,
@@ -92,7 +92,7 @@ class AgentFactory:
 
     @staticmethod
     def create_all() -> dict[str, EnterpriseRAGAgent]:
-        """预热所有use_case的Agent（服务启动时调用）。"""
+        """Initialize agents for all use cases during service startup."""
         return {
             use_case: AgentFactory.create(use_case)
             for use_case in ["kb_qa", "helpdesk", "compliance"]
