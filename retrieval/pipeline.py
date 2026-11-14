@@ -36,7 +36,7 @@ class OptimizedRAGPipeline:
         self.embedder = embedder
         self.reranker = reranker
 
-        # 延迟指标收集（用于监控和调优依据）
+        
         self._latency_records: list[float] = []
 
     async def retrieve(
@@ -58,12 +58,12 @@ class OptimizedRAGPipeline:
         """
         t0 = time.perf_counter()
 
-        # ── Step 1: 并行双路检索 ──────────────────────────────
-        # 原串行写法（已废弃，保留注释作为对比）：
+        
+        
         # dense_docs  = await self._dense_search(query, tenant_id, candidate_k, use_hyde)
         # sparse_docs = await self._sparse_search(query, tenant_id, candidate_k)
 
-        # 优化后：asyncio.gather 并行，两路同时发出
+        
         dense_task  = asyncio.create_task(
             self._dense_search(query, tenant_id, candidate_k, use_hyde)
         )
@@ -76,14 +76,14 @@ class OptimizedRAGPipeline:
         logger.debug(f"Parallel retrieval done in {t_retrieval:.1f}ms | "
                      f"dense={len(dense_docs)}, sparse={len(sparse_docs)}")
 
-        # ── Step 2: 合并去重 ──────────────────────────────────
+        
         merged = self._deduplicate(dense_docs + sparse_docs)
 
         if not merged:
             logger.warning(f"No documents retrieved for query: {query[:60]}")
             return []
 
-        # ── Step 3: Rerank（可选，helpdesk/kb_qa启用）──────────
+        
         if rerank and len(merged) > top_k:
             docs = await self.reranker.rerank(
                 query=query,
@@ -92,7 +92,7 @@ class OptimizedRAGPipeline:
                 score_threshold=score_threshold,
             )
         else:
-            # 不做rerank时，按向量分数截取top_k，仍做阈值过滤
+            
             docs = [
                 d for d in merged[:top_k]
                 if d.metadata.get("score", 1.0) >= score_threshold
@@ -105,7 +105,7 @@ class OptimizedRAGPipeline:
         return docs
 
     # ─────────────────────────────────────────────
-    # 向量检索（Dense）
+    
     # ─────────────────────────────────────────────
     async def _dense_search(
         self,
@@ -118,13 +118,13 @@ class OptimizedRAGPipeline:
         使用OpenAI text-embedding-3-large进行向量相似度检索。
         use_hyde=True时先生成假设答案再做embedding（提升语义匹配）。
         """
-        # 获取query向量（可能包含HyDE扩展）
+        
         if use_hyde:
             query_vector = await self.embedder.embed_query_with_hyde(query)
         else:
             query_vector = await self.embedder.embed_query(query)
 
-        # Qdrant检索，按tenant_id过滤（多租户隔离）
+        
         from qdrant_client.models import Filter, FieldCondition, MatchValue
         results = await asyncio.to_thread(
             self.qdrant.search,
@@ -159,7 +159,7 @@ class OptimizedRAGPipeline:
         return docs
 
     # ─────────────────────────────────────────────
-    # BM25关键词检索（Sparse）
+    
     # ─────────────────────────────────────────────
     async def _sparse_search(
         self,
@@ -174,11 +174,11 @@ class OptimizedRAGPipeline:
         注意：实际生产中可替换为Elasticsearch BM25 或 Qdrant sparse vectors。
         此处使用mock实现展示并行架构，不影响延迟优化逻辑的理解。
         """
-        # 实际生产：调用ES或Qdrant sparse vector API
-        # 此处模拟网络延迟（真实BM25查询耗时约50-100ms）
-        await asyncio.sleep(0.0)  # 替换为真实BM25调用
+        
+        
+        await asyncio.sleep(0.0)  
 
-        # 示例：返回空列表（真实实现见注释）
+        
         # results = await self.es_client.search(
         #     index=f"enterprise_{tenant_id}",
         #     body={"query": {"match": {"content": query}}, "size": k}
@@ -186,7 +186,7 @@ class OptimizedRAGPipeline:
         return []
 
     # ─────────────────────────────────────────────
-    # 去重（按content哈希）
+    
     # ─────────────────────────────────────────────
     @staticmethod
     def _deduplicate(docs: list[Document]) -> list[Document]:
@@ -203,7 +203,7 @@ class OptimizedRAGPipeline:
         return unique
 
     # ─────────────────────────────────────────────
-    # 延迟统计（用于监控告警）
+    
     # ─────────────────────────────────────────────
     def get_latency_stats(self) -> dict:
         """返回检索延迟的统计数据（P50/P95/P99）。"""

@@ -58,7 +58,7 @@ class TwoStageRetriever:
         if not documents:
             return []
 
-        # 超过候选数限制时截断（Cohere API最大1000条）
+        
         candidates = documents[:1000]
         docs_text = [d.page_content for d in candidates]
 
@@ -67,24 +67,24 @@ class TwoStageRetriever:
                 model=self.model,
                 query=query,
                 documents=docs_text,
-                top_n=min(top_n * 2, len(candidates)),  # 多取一些，再做阈值过滤
+                top_n=min(top_n * 2, len(candidates)),  
                 return_documents=True,
             )
         except cohere.CohereAPIError as e:
             logger.error(f"Cohere rerank failed: {e}. Falling back to vector scores.")
-            # 降级：按原始向量分数返回
+            
             return sorted(
                 candidates,
                 key=lambda d: d.metadata.get("score", 0),
                 reverse=True
             )[:top_n]
 
-        # 将relevance_score写入metadata，并做阈值过滤
+        
         reranked = []
         for r in resp.results:
             if r.relevance_score < score_threshold:
-                # 关键步骤：过滤低相关性文档，减少LLM上下文噪声
-                # 这是幻觉率从16%降到11%的直接原因
+                
+                
                 logger.debug(f"Filtered doc (score={r.relevance_score:.3f} < {score_threshold})")
                 continue
 
