@@ -32,7 +32,7 @@ from locust.runners import MasterRunner
 
 
 # ─────────────────────────────────────────────────────
-# 模拟查询数据集（覆盖3个use_case）
+
 # ─────────────────────────────────────────────────────
 
 KB_QA_QUERIES = [
@@ -69,11 +69,11 @@ COMPLIANCE_QUERIES = [
     "供应商协议风险评估",
 ]
 
-TENANT_IDS = [f"tenant_{i:03d}" for i in range(10)]  # 10个模拟租户
+TENANT_IDS = [f"tenant_{i:03d}" for i in range(10)]  
 
 
 # ─────────────────────────────────────────────────────
-# 压测用户行为
+
 # ─────────────────────────────────────────────────────
 
 class RAGAgentUser(HttpUser):
@@ -87,19 +87,19 @@ class RAGAgentUser(HttpUser):
         """用户会话初始化：随机分配租户。"""
         self.tenant_id = random.choice(TENANT_IDS)
 
-    @task(5)  # 权重5：知识库问答是主要场景
+    @task(5)  
     def query_kb_qa(self):
         """知识库问答查询。"""
         query = random.choice(KB_QA_QUERIES)
         self._send_chat(query, "kb_qa")
 
-    @task(3)  # 权重3：客服辅助次之
+    @task(3)  
     def query_helpdesk(self):
         """客服辅助查询。"""
         query = random.choice(HELPDESK_QUERIES)
         self._send_chat(query, "helpdesk")
 
-    @task(2)  # 权重2：合规审查频率最低
+    @task(2)  
     def query_compliance(self):
         """合规审查查询。"""
         query = random.choice(COMPLIANCE_QUERIES)
@@ -119,16 +119,16 @@ class RAGAgentUser(HttpUser):
         with self.client.post(
             "/v1/chat",
             json=payload,
-            name=f"/v1/chat [{use_case}]",  # 按use_case分组统计
+            name=f"/v1/chat [{use_case}]",  
             catch_response=True,
         ) as resp:
             if resp.status_code == 200:
                 data = resp.json()
-                # 验证响应格式
+                
                 if not data.get("answer"):
                     resp.failure("Response missing 'answer' field")
                     return
-                # 验证延迟SLA（P50 ≤ 2000ms 由Locust统计，这里只记录异常值）
+                
                 if data.get("latency_ms", 0) > 5000:
                     resp.failure(f"Latency too high: {data['latency_ms']}ms")
                 else:
@@ -143,7 +143,7 @@ class StreamUser(HttpUser):
     主要测试首token延迟（TTFT）。
     """
     wait_time = between(2, 5)
-    weight = 2  # 20%流式用户
+    weight = 2  
 
     @task
     def stream_query(self):
@@ -158,7 +158,7 @@ class StreamUser(HttpUser):
             catch_response=True,
         ) as resp:
             if resp.status_code == 200:
-                # 读取流式响应
+                
                 content = b""
                 for chunk in resp.iter_content(chunk_size=1024):
                     content += chunk
@@ -168,7 +168,7 @@ class StreamUser(HttpUser):
 
 
 # ─────────────────────────────────────────────────────
-# 压测结果处理钩子
+
 # ─────────────────────────────────────────────────────
 
 @events.quitting.add_listener
@@ -189,7 +189,7 @@ def on_quitting(environment, **kwargs):
     print(f"  RPS:               {total.total_rps:.1f}")
     print("="*55)
 
-    # SLA断言
+    
     p50 = total.get_response_time_percentile(0.5)
     p95 = total.get_response_time_percentile(0.95)
     fail_ratio = total.fail_ratio
