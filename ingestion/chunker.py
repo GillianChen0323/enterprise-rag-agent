@@ -1,23 +1,6 @@
-"""
-ingestion/chunker.py
---------------------
-AdaptiveChunker：多种分块策略实现与A/B对比。
-对应简历：retrieval pipeline tuning (chunking strategy) → 25% relevance improvement
-
-策略对比（内部评估集，Recall@5）：
-┌──────────────────────┬──────────┬──────────┐
-│ 策略                 │ Recall@5 │ 相对基线  │
-├──────────────────────┼──────────┼──────────┤
-│ Fixed 512chars       │  0.61    │ baseline │  ← 原方案
-│ Sentence-aware       │  0.74    │  +21%    │
-│ Hierarchical (final) │  0.78    │  +28%    │  ← 最终方案
-└──────────────────────┴──────────┴──────────┘
-
-Hierarchical原理：
-- 子chunk（256 tokens）：检索粒度，embedding更精准
-- 父chunk（1024 tokens）：包含完整上下文，喂给LLM
-- 解决了"检索精准但上下文被截断"的核心矛盾
-"""
+"""Adaptive chunking with fixed-size, sentence-aware, and hierarchical strategies.
+Hierarchical chunking uses smaller child chunks for retrieval and larger parent chunks
+for generation, balancing retrieval granularity with context preservation."""
 
 import hashlib
 import logging
@@ -29,11 +12,11 @@ logger = logging.getLogger(__name__)
 
 @dataclass
 class ChunkedDocument:
-    """分块后的文档单元。"""
-    chunk_id: str           
-    page_content: str       
-    parent_text: str        
-    parent_id: str          
+    """A document chunk."""
+    chunk_id: str           # Content-hash identifier.
+    page_content: str       # Child content for retrieval.
+    parent_text: str        # Parent content for generation.
+    parent_id: str          # Parent identifier.
     metadata: dict
 
     @classmethod
@@ -50,25 +33,20 @@ class ChunkedDocument:
 
 
 class AdaptiveChunker:
-    """
-    自适应分块器，支持3种策略。
-    生产环境根据AgentConfig.use_hierarchical_chunking选择策略。
-    """
+    """Chunker supporting three configurable strategies."""
 
     def __init__(self, chunk_size: int = 512, chunk_overlap: int = 64):
         self.chunk_size = chunk_size
         self.chunk_overlap = chunk_overlap
 
     # ─────────────────────────────────────────────
-    
+    # Fixed-size baseline.
     # ─────────────────────────────────────────────
     def fixed_chunk(
         self, text: str, metadata: dict = None
     ) -> list[ChunkedDocument]:
-        """
-        按固定字符数切分，不考虑语义边界。
-        Recall@5 = 0.61（最差）。保留仅作对比基线。
-        """
+        """Split by a fixed character count without semantic boundary detection. Retained
+        as a comparison baseline."""
         chunks = []
         start = 0
         parent_id = hashlib.md5(text[:100].encode()).hexdigest()[:8]
@@ -77,7 +55,7 @@ class AdaptiveChunker:
             chunk_text = text[start:end]
             chunks.append(ChunkedDocument.from_texts(
                 child_text=chunk_text,
-                parent_text=chunk_text,  
+                parent_text=chunk_text,  # Parent and child content are identical.
                 parent_id=parent_id,
                 metadata=metadata or {},
             ))
@@ -85,16 +63,13 @@ class AdaptiveChunker:
         return chunks
 
     # ─────────────────────────────────────────────
-    
+    # Sentence-aware strategy.
     # ─────────────────────────────────────────────
     def sentence_chunk(
         self, text: str, metadata: dict = None
     ) -> list[ChunkedDocument]:
-        """
-        按句子边界切分，避免句子被截断。
-        Recall@5 = 0.74（+21% vs baseline）。
-        """
-        
+        """Split at sentence boundaries to reduce sentence truncation."""
+        # Chinese and English sentence boundaries.
         import re
         sentences = re.split(r'(?<=[。！？\.\!\?])\s*|\n+', text)
         sentences = [s.strip() for s in sentences if s.strip()]
@@ -113,7 +88,7 @@ class AdaptiveChunker:
                     parent_id=parent_id,
                     metadata=metadata or {},
                 ))
-                
+                # Retain the last sentence as overlap.
                 current = current[-1:]
                 current_len = len(current[0]) if current else 0
             current.append(sent)
@@ -130,7 +105,7 @@ class AdaptiveChunker:
         return chunks
 
     # ─────────────────────────────────────────────
-    
+    # Hierarchical strategy.
     # ─────────────────────────────────────────────
     def hierarchical_chunk(
         self,
@@ -141,20 +116,9 @@ class AdaptiveChunker:
         child_chunk_size: int = 256,
         child_overlap: int = 32,
     ) -> list[ChunkedDocument]:
-        """
-        两级分块策略：
-        - 父chunk（~1024 tokens）：保留完整上下文，喂给LLM生成答案
-        - 子chunk（~256 tokens）：用于向量化和检索，粒度更细更精准
-
-        检索时：按子chunk相似度召回 → 返回对应父chunk内容给LLM
-        效果：Recall@5 = 0.78（+28% vs baseline）
-
-        原理：传统分块的核心矛盾是"检索粒度"vs"上下文完整性"
-        - 大chunk：上下文完整，但embedding被稀释，检索精度低
-        - 小chunk：embedding精准，但喂给LLM时缺少前后文，增加幻觉
-        - Hierarchical：用小chunk检索，用大chunk生成，两全其美
-        """
-        
+        """Create parent and child chunks. Retrieve using smaller child chunks and supply
+        associated parent content to generation to preserve surrounding context."""
+        # Split parent chunks.
         parent_chunks = self._split_text(
             text, chunk_size=parent_chunk_size, overlap=parent_overlap
         )
@@ -165,7 +129,7 @@ class AdaptiveChunker:
                 f"{p_idx}:{parent_text[:50]}".encode()
             ).hexdigest()[:10]
 
-            
+            # Split children within each parent.
             child_texts = self._split_text(
                 parent_text, chunk_size=child_chunk_size, overlap=child_overlap
             )
@@ -180,7 +144,7 @@ class AdaptiveChunker:
                 }
                 chunk = ChunkedDocument.from_texts(
                     child_text=child_text,
-                    parent_text=parent_text,   
+                    parent_text=parent_text,   # Store parent context for generation.
                     parent_id=parent_id,
                     metadata=child_meta,
                 )
@@ -193,16 +157,14 @@ class AdaptiveChunker:
         return all_child_chunks
 
     # ─────────────────────────────────────────────
-    
+    # Recursive splitting.
     # ─────────────────────────────────────────────
     @staticmethod
     def _split_text(
         text: str, chunk_size: int, overlap: int
     ) -> list[str]:
-        """
-        按优先级分隔符递归切分，尽量保留段落/句子完整性。
-        分隔符优先级：段落 > 换行 > 中文句号 > 英文句号 > 空格
-        """
+        """Recursively split by prioritized separators: paragraphs, newlines, Chinese
+        sentence boundaries, English sentence boundaries, and spaces."""
         separators = ["\n\n", "\n", "。", ".", " ", ""]
         chunks = []
 
@@ -231,7 +193,7 @@ class AdaptiveChunker:
 
         raw_chunks = split_recursive(text, separators)
 
-        
+        # Overlap adjacent chunks.
         for i, chunk in enumerate(raw_chunks):
             if i > 0 and overlap > 0:
                 prev = raw_chunks[i - 1]
@@ -243,7 +205,7 @@ class AdaptiveChunker:
         return chunks
 
     # ─────────────────────────────────────────────
-    
+    # Strategy dispatcher.
     # ─────────────────────────────────────────────
     def chunk(
         self,
@@ -251,10 +213,7 @@ class AdaptiveChunker:
         metadata: dict = None,
         strategy: str = "hierarchical",
     ) -> list[ChunkedDocument]:
-        """
-        strategy: "fixed" | "sentence" | "hierarchical"
-        生产环境使用"hierarchical"（AgentConfig.use_hierarchical_chunking=True）
-        """
+        """Dispatch the fixed, sentence, or hierarchical strategy."""
         if strategy == "hierarchical":
             return self.hierarchical_chunk(
                 text, metadata,
