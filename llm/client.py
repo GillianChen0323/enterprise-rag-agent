@@ -1,14 +1,5 @@
-"""
-llm/client.py
--------------
-LLMClient：LLM客户端，HTTP连接池复用 + 流式输出。
-对应简历：optimized service orchestration and API chaining → 20% latency reduction
-
-优化点：
-1. 全局共享httpx连接池（避免每次请求重建TCP连接，节省~50-100ms）
-2. 流式输出（stream=True），首token<500ms，改善用户体验
-3. 重试机制（指数退避），处理OpenAI Rate Limit / 5xx
-"""
+"""LLM client with a shared HTTP connection pool, streaming generation, and exponential-
+backoff retries for rate limits and server errors."""
 
 import asyncio
 import logging
@@ -21,31 +12,27 @@ from openai import AsyncOpenAI, RateLimitError, APIStatusError
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────
-
+# Process-wide connection pool.
 # ─────────────────────────────────────────────────────
-
-
+# Per-request clients repeat connection setup.
+# Reuse persistent connections.
 _SHARED_HTTP_CLIENT = httpx.AsyncClient(
     limits=httpx.Limits(
-        max_connections=100,           
-        max_keepalive_connections=20,  
+        max_connections=100,           # Concurrent connection limit.
+        max_keepalive_connections=20,  # Persistent connection limit.
     ),
     timeout=httpx.Timeout(
-        connect=5.0,   
-        read=30.0,     
+        connect=5.0,   # Connection timeout.
+        read=30.0,     # Streaming read timeout.
         write=10.0,
-        pool=5.0,      
+        pool=5.0,      # Pool wait timeout.
     ),
 )
 
 
 class LLMClient:
-    """
-    生产级LLM客户端。
-    - 复用HTTP连接池
-    - 支持非流式生成（run）和流式生成（stream_generate）
-    - 内置重试（Rate Limit / 5xx）
-    """
+    """LLM client supporting pooled connections, complete responses, streaming responses,
+    and retries."""
 
     def __init__(
         self,
@@ -58,13 +45,13 @@ class LLMClient:
         self.client = AsyncOpenAI(
             api_key=api_key,
             http_client=_SHARED_HTTP_CLIENT,
-            max_retries=0,  
+            max_retries=0,  # Explicit retry handling.
         )
-        
+        # Record generation latency.
         self._latency_records: list[float] = []
 
     # ─────────────────────────────────────────
-    
+    # Complete response generation.
     # ─────────────────────────────────────────
     async def generate(
         self,
@@ -73,10 +60,8 @@ class LLMClient:
         max_tokens: int = 1024,
         temperature: float = 0.1,
     ) -> str:
-        """
-        非流式LLM调用，返回完整answer字符串。
-        包含指数退避重试（Rate Limit场景）。
-        """
+        """Return a complete answer string with exponential-backoff retries for rate
+        limits."""
         t0 = time.perf_counter()
         last_error = None
 
@@ -99,26 +84,26 @@ class LLMClient:
                 return answer
 
             except RateLimitError as e:
-                wait = 2 ** attempt  
+                wait = 2 ** attempt  # Exponential backoff: 1, 2, 4 seconds.
                 logger.warning(f"Rate limit hit (attempt {attempt+1}), "
                                f"retrying in {wait}s...")
                 await asyncio.sleep(wait)
                 last_error = e
 
             except APIStatusError as e:
-                if e.status_code >= 500:  
+                if e.status_code >= 500:  # Retry server errors.
                     wait = 2 ** attempt
                     logger.warning(f"OpenAI 5xx (attempt {attempt+1}), "
                                    f"retrying in {wait}s...")
                     await asyncio.sleep(wait)
                     last_error = e
                 else:
-                    raise  
+                    raise  # Do not retry other client errors.
 
         raise RuntimeError(f"LLM generate failed after {self.max_retries} retries: {last_error}")
 
     # ─────────────────────────────────────────
-    
+    # Streaming generation.
     # ─────────────────────────────────────────
     async def stream_generate(
         self,
@@ -127,14 +112,8 @@ class LLMClient:
         max_tokens: int = 1024,
         temperature: float = 0.1,
     ) -> AsyncIterator[str]:
-        """
-        流式LLM调用，逐token yield。
-        首token延迟目标：<500ms（在2s总延迟预算中）
-
-        使用方式：
-            async for token in llm.stream_generate(messages):
-                await websocket.send(token)  # 或 SSE push
-        """
+        """Yield generated tokens incrementally. Target time to first token: < 500 ms.
+        Consume with async for token in llm.stream_generate(messages)."""
         t_start = time.perf_counter()
         first_token_logged = False
 
@@ -155,7 +134,7 @@ class LLMClient:
                     yield token
 
     # ─────────────────────────────────────────
-    
+    # Latency metrics.
     # ─────────────────────────────────────────
     def get_latency_stats(self) -> dict:
         if not self._latency_records:
