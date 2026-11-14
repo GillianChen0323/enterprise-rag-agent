@@ -40,13 +40,13 @@ class SemanticCache:
             redis_url,
             encoding="utf-8",
             decode_responses=True,
-            # 连接池配置（高并发关键）
+            
             max_connections=50,
         )
         self.key_prefix = key_prefix
         self.default_ttl = default_ttl
 
-        # 缓存统计（用于监控命中率）
+        
         self._hits = 0
         self._misses = 0
 
@@ -58,7 +58,7 @@ class SemanticCache:
         3. 拼接 prefix:use_case:tenant_id:hash
         """
         normalized = query.strip().lower()
-        # 去除多余空白（"你好  世界" == "你好 世界"）
+        
         import re
         normalized = re.sub(r'\s+', ' ', normalized)
         query_hash = hashlib.md5(normalized.encode("utf-8")).hexdigest()
@@ -87,7 +87,7 @@ class SemanticCache:
                 self._misses += 1
                 return None
         except Exception as e:
-            # 缓存故障不影响主流程（降级到全量检索）
+            
             logger.warning(f"Cache GET error: {e}")
             return None
 
@@ -107,11 +107,11 @@ class SemanticCache:
         key = self._build_key(query, use_case, tenant_id)
         effective_ttl = ttl or self.default_ttl
 
-        # 不缓存空结果或错误结果
+        
         if not result.get("answer"):
             return False
 
-        # 缓存时去掉from_cache字段，避免写入脏数据
+        
         cache_data = {k: v for k, v in result.items() if k != "from_cache"}
 
         try:
