@@ -1,18 +1,7 @@
-"""
-cache/semantic_cache.py
------------------------
-SemanticCache：Redis语义缓存，减少重复查询LLM调用。
-对应简历：optimized service orchestration → 20% latency reduction
-
-设计思路：
-- 企业场景中，同一客户团队的查询高度重复（重复率约30%）
-- 命中缓存直接返回，延迟从~2000ms降至<50ms
-- 缓存key = MD5(use_case + tenant_id + normalized_query)
-- TTL按use_case差异化：合规(3600s) > 知识库(600s) > 客服(180s)
-
-注意：此处为精确匹配缓存（非语义相似度缓存）。
-生产环境更进一步可做embedding相似度缓存（query embedding → nearest cache hit）。
-"""
+"""Redis-backed query caching to avoid repeated LLM calls. Keys include use case, tenant
+ID, and normalized query hash; TTL varies by use case. This implementation uses exact
+matching, NOT semantic similarity. Embedding-based cache lookup would require a separate
+implementation."""
 
 import hashlib
 import json
@@ -25,10 +14,8 @@ logger = logging.getLogger(__name__)
 
 
 class SemanticCache:
-    """
-    Redis-backed查询缓存。
-    key空间：rag:cache:{use_case}:{tenant_id}:{query_hash}
-    """
+    """Redis-backed query cache. Key namespace:
+    rag:cache:{use_case}:{tenant_id}:{query_hash}."""
 
     def __init__(
         self,
@@ -40,25 +27,21 @@ class SemanticCache:
             redis_url,
             encoding="utf-8",
             decode_responses=True,
-            
+            # Connection pool settings.
             max_connections=50,
         )
         self.key_prefix = key_prefix
         self.default_ttl = default_ttl
 
-        
+        # Cache hit-rate counters.
         self._hits = 0
         self._misses = 0
 
     def _build_key(self, query: str, use_case: str, tenant_id: str) -> str:
-        """
-        构建缓存key：
-        1. 对query做归一化（去除多余空白、统一大小写）
-        2. 用MD5压缩为固定长度hash
-        3. 拼接 prefix:use_case:tenant_id:hash
-        """
+        """Normalize query whitespace and case, hash with MD5, and build
+        prefix:use_case:tenant_id:hash."""
         normalized = query.strip().lower()
-        
+        # Normalize repeated whitespace.
         import re
         normalized = re.sub(r'\s+', ' ', normalized)
         query_hash = hashlib.md5(normalized.encode("utf-8")).hexdigest()
@@ -70,10 +53,7 @@ class SemanticCache:
         use_case: str,
         tenant_id: str,
     ) -> Optional[dict]:
-        """
-        查询缓存。命中返回dict，未命中返回None。
-        平均延迟：<5ms（Redis内存读取）
-        """
+        """Return the cached dictionary on a hit, or None on a miss."""
         key = self._build_key(query, use_case, tenant_id)
         try:
             value = await self.redis.get(key)
@@ -87,7 +67,7 @@ class SemanticCache:
                 self._misses += 1
                 return None
         except Exception as e:
-            
+            # Fall back to retrieval if the cache fails.
             logger.warning(f"Cache GET error: {e}")
             return None
 
@@ -99,19 +79,16 @@ class SemanticCache:
         result: dict,
         ttl: Optional[int] = None,
     ) -> bool:
-        """
-        写入缓存。
-        ttl优先级：参数 > 默认值
-        写入失败不抛异常（缓存不可用时降级处理）。
-        """
+        """Write a cache entry. An explicit TTL overrides the default. Write failures do
+        not interrupt the main pipeline."""
         key = self._build_key(query, use_case, tenant_id)
         effective_ttl = ttl or self.default_ttl
 
-        
+        # Skip empty or error results.
         if not result.get("answer"):
             return False
 
-        
+        # Exclude from_cache from stored results.
         cache_data = {k: v for k, v in result.items() if k != "from_cache"}
 
         try:
@@ -128,10 +105,8 @@ class SemanticCache:
         use_case: str,
         tenant_id: str,
     ) -> int:
-        """
-        批量失效某个tenant的所有缓存（文档更新后调用）。
-        返回删除的key数量。
-        """
+        """Invalidate all cache entries for a tenant after document updates. Return the
+        number of deleted keys."""
         pattern = f"{self.key_prefix}:{use_case}:{tenant_id}:*"
         try:
             keys = await self.redis.keys(pattern)
@@ -146,7 +121,7 @@ class SemanticCache:
             return 0
 
     async def invalidate_all(self) -> int:
-        """清空所有RAG缓存（慎用）。"""
+        """Clear all RAG cache entries. Use with care."""
         pattern = f"{self.key_prefix}:*"
         try:
             keys = await self.redis.keys(pattern)
@@ -158,7 +133,7 @@ class SemanticCache:
             return 0
 
     def get_stats(self) -> dict:
-        """返回缓存命中率统计。"""
+        """Return cache hit-rate statistics."""
         total = self._hits + self._misses
         return {
             "hits": self._hits,
@@ -168,5 +143,5 @@ class SemanticCache:
         }
 
     async def close(self):
-        """关闭Redis连接（服务关闭时调用）。"""
+        """Close the Redis connection during shutdown."""
         await self.redis.aclose()
