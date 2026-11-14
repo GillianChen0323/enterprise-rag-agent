@@ -1,19 +1,6 @@
-"""
-retrieval/reranker.py
----------------------
-TwoStageRetriever：粗排→精排两阶段检索。
-对应简历：retrieval pipeline tuning (reranking) → 25% relevance improvement
-
-核心设计：
-- Stage 1（粗排）：向量检索top-20，高召回率
-- Stage 2（精排）：Cohere rerank-multilingual-v3.0，高精度
-- 阈值过滤：relevance_score > threshold，直接减少幻觉来源
-
-效果数据（内部评估集 100条 ground-truth QA pairs）：
-- 无Rerank：MRR@5 = 0.58
-- 有Rerank：MRR@5 = 0.79  (+36%)
-- 幻觉率（答案无文档支撑）：16% → 11%  (-31%)
-"""
+"""Cohere reranking for two-stage retrieval: retrieve candidates, rerank, and filter by
+relevance score. Measure quality and groundedness on a representative evaluation
+dataset."""
 
 import asyncio
 import logging
@@ -26,11 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class TwoStageRetriever:
-    """
-    Cohere两阶段Reranker。
-    输入：粗排候选文档列表
-    输出：精排后的top-k文档（含relevance_score元数据）
-    """
+    """Rerank candidate documents and return top-K results with relevance-score metadata."""
 
     def __init__(
         self,
@@ -47,18 +30,13 @@ class TwoStageRetriever:
         top_n: int = 5,
         score_threshold: float = 0.5,
     ) -> list[Document]:
-        """
-        对候选文档做Cohere精排，并过滤低相关性结果。
-
-        score_threshold是减少幻觉的关键超参数：
-        - 过高（>0.7）：召回率下降，有时无文档可用，LLM倾向编造
-        - 过低（<0.3）：低质量文档混入上下文，引入噪声，增加幻觉
-        - 最优（0.5）：在评估集上幻觉率最低（通过网格搜索确定）
-        """
+        """Rerank candidates with Cohere and filter low-relevance results. High thresholds
+        may reduce recall; low thresholds may retain noise. Tune on representative
+        evaluation data."""
         if not documents:
             return []
 
-        
+        # Truncate candidate count.
         candidates = documents[:1000]
         docs_text = [d.page_content for d in candidates]
 
@@ -67,24 +45,24 @@ class TwoStageRetriever:
                 model=self.model,
                 query=query,
                 documents=docs_text,
-                top_n=min(top_n * 2, len(candidates)),  
+                top_n=min(top_n * 2, len(candidates)),  # Request extra results before filtering.
                 return_documents=True,
             )
         except cohere.CohereAPIError as e:
             logger.error(f"Cohere rerank failed: {e}. Falling back to vector scores.")
-            
+            # Fallback to vector scores.
             return sorted(
                 candidates,
                 key=lambda d: d.metadata.get("score", 0),
                 reverse=True
             )[:top_n]
 
-        
+        # Store and filter relevance scores.
         reranked = []
         for r in resp.results:
             if r.relevance_score < score_threshold:
-                
-                
+                # Reduce low-relevance context noise.
+                # Measure groundedness impact on evaluation data.
                 logger.debug(f"Filtered doc (score={r.relevance_score:.3f} < {score_threshold})")
                 continue
 
@@ -109,9 +87,7 @@ class TwoStageRetriever:
         top_n: int = 5,
         score_threshold: float = 0.5,
     ) -> list[list[Document]]:
-        """
-        批量rerank（多查询并行），用于评估阶段批量处理。
-        """
+        """Rerank multiple queries concurrently for batch evaluation."""
         tasks = [
             self.rerank(q, docs, top_n, score_threshold)
             for q, docs in zip(queries, documents_list)
