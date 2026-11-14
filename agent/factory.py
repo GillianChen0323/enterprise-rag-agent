@@ -17,7 +17,7 @@ from llm.client import LLMClient
 
 
 # ─────────────────────────────────────────────
-# 单例组件（全局共享，避免重复建连接池）
+
 # ─────────────────────────────────────────────
 
 @lru_cache(maxsize=1)
@@ -52,7 +52,7 @@ def get_shared_reranker() -> TwoStageRetriever:
 
 
 # ─────────────────────────────────────────────
-# Agent工厂
+
 # ─────────────────────────────────────────────
 
 class AgentFactory:
@@ -68,14 +68,14 @@ class AgentFactory:
         """
         config: AgentConfig = get_config(use_case)
 
-        # Qdrant向量库连接（每个use_case对应独立collection）
+        
         from qdrant_client import QdrantClient
         qdrant_client = QdrantClient(
             url=qdrant_url or os.getenv("QDRANT_URL", "http://localhost:6333")
         )
         collection_name = f"enterprise_{use_case}"
 
-        # 检索流水线（包含embedder + reranker）
+        
         pipeline = OptimizedRAGPipeline(
             qdrant_client=qdrant_client,
             collection_name=collection_name,
