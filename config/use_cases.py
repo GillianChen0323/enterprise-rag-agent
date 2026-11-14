@@ -1,9 +1,4 @@
-"""
-config/use_cases.py
--------------------
-3个业务场景的差异化AgentConfig配置。
-对应简历：configurable business logic, serving enterprise clients across 3 distinct use cases
-"""
+"""Agent configurations for three business use cases."""
 
 from dataclasses import dataclass, field
 from typing import Optional
@@ -11,50 +6,47 @@ from typing import Optional
 
 @dataclass
 class AgentConfig:
-    """
-    可配置的Agent业务逻辑参数。
-    每个enterprise use case对应一个AgentConfig实例，
-    共用同一套RAG + LLM框架，通过配置驱动差异化行为。
-    """
-    
+    """Configurable agent settings. Each use case has its own AgentConfig and shares the
+    RAG and LLM framework."""
+    # Use-case identifier.
     use_case: str
 
-    
-    top_k: int = 5                     
-    candidate_k: int = 20              
-    rerank: bool = True                
-    score_threshold: float = 0.5       
-    hybrid_search: bool = True         
+    # Retrieval settings.
+    top_k: int = 5                     # Final document count.
+    candidate_k: int = 20              # Stage 1 candidate count.
+    rerank: bool = True                # Enable Cohere reranking.
+    score_threshold: float = 0.5       # Relevance threshold.
+    hybrid_search: bool = True         # Enable hybrid retrieval.
 
-    
+    # Ingestion chunking settings.
     chunk_size: int = 512
     chunk_overlap: int = 64
     use_hierarchical_chunking: bool = True
 
-    
+    # Embedding settings.
     embedding_model: str = "text-embedding-3-large"
-    use_hyde: bool = True              
+    use_hyde: bool = True              # HyDE query expansion.
     hyde_max_tokens: int = 150
 
-    
+    # LLM settings.
     llm_model: str = "gpt-4o-mini"
     max_tokens: int = 1024
-    temperature: float = 0.1           
+    temperature: float = 0.1           # Reduce generation variability.
     stream: bool = True
 
-    
-    cache_ttl: int = 300               
+    # Cache settings.
+    cache_ttl: int = 300               # TTL in seconds.
     cache_enabled: bool = True
 
-    
+    # Use-case-specific system prompt.
     system_prompt: str = ""
 
-    
+    # Tenant isolation field.
     tenant_filter_field: str = "tenant_id"
 
 
 # ─────────────────────────────────────────────
-
+# Three enterprise use cases.
 # ─────────────────────────────────────────────
 
 KB_QA_CONFIG = AgentConfig(
@@ -68,7 +60,7 @@ KB_QA_CONFIG = AgentConfig(
     chunk_overlap=64,
     use_hierarchical_chunking=True,
     use_hyde=True,
-    cache_ttl=600,          
+    cache_ttl=600,          # Cache stable knowledge-base content longer.
     system_prompt=(
         "你是企业内部知识库智能助手。"
         "请严格基于以下检索到的文档内容回答问题，"
@@ -83,14 +75,14 @@ HELPDESK_CONFIG = AgentConfig(
     top_k=3,
     candidate_k=15,
     rerank=True,
-    score_threshold=0.55,   
+    score_threshold=0.55,   # Higher support relevance threshold.
     hybrid_search=True,
-    chunk_size=256,          
+    chunk_size=256,          # Smaller support chunks.
     chunk_overlap=32,
     use_hierarchical_chunking=False,
-    use_hyde=False,          
-    cache_ttl=180,           
-    max_tokens=512,          
+    use_hyde=False,          # Skip HyDE for explicit support queries.
+    cache_ttl=180,           # Short TTL for time-sensitive tickets.
+    max_tokens=512,          # Concise support answers.
     system_prompt=(
         "你是智能客服辅助系统，帮助客服人员快速定位解决方案。"
         "请给出简洁、可操作的步骤，优先引用历史成功案例。"
@@ -103,16 +95,16 @@ COMPLIANCE_CONFIG = AgentConfig(
     use_case="compliance",
     top_k=8,
     candidate_k=25,
-    rerank=False,            
-    score_threshold=0.4,     
+    rerank=False,            # Broad compliance coverage.
+    score_threshold=0.4,     # Retain potentially relevant clauses.
     hybrid_search=True,
-    chunk_size=1024,         
+    chunk_size=1024,         # Preserve longer compliance context.
     chunk_overlap=128,
     use_hierarchical_chunking=True,
     use_hyde=True,
-    cache_ttl=3600,          
+    cache_ttl=3600,          # Long TTL for stable regulations.
     max_tokens=2048,
-    temperature=0.0,         
+    temperature=0.0,         # Reduce output variability.
     system_prompt=(
         "你是企业合规审查助手。"
         "请逐条分析以下文档中的潜在合规风险，"
@@ -122,7 +114,7 @@ COMPLIANCE_CONFIG = AgentConfig(
     ),
 )
 
-
+# Configuration registry.
 USE_CASE_REGISTRY: dict[str, AgentConfig] = {
     "kb_qa":       KB_QA_CONFIG,
     "helpdesk":    HELPDESK_CONFIG,
@@ -131,7 +123,7 @@ USE_CASE_REGISTRY: dict[str, AgentConfig] = {
 
 
 def get_config(use_case: str) -> AgentConfig:
-    """根据use_case名称获取对应配置，不存在则抛出ValueError。"""
+    """Return the configuration for a use-case name; raise ValueError if it is unknown."""
     if use_case not in USE_CASE_REGISTRY:
         raise ValueError(
             f"未知的use_case: '{use_case}'。"
