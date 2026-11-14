@@ -25,7 +25,7 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────
-# 全局Agent注册表（服务启动时预热，避免首请求冷启动）
+
 # ─────────────────────────────────────────────────────
 _agents: dict = {}
 
@@ -39,11 +39,11 @@ async def lifespan(app: FastAPI):
         logger.info(f"Agents ready: {list(_agents.keys())}")
     except Exception as e:
         logger.error(f"Agent initialization failed: {e}")
-        # 生产环境：启动失败应该告警，此处不阻断服务启动
+        
 
-    yield  # 服务运行中
+    yield  
 
-    # 关闭时清理资源
+    
     from agent.factory import get_shared_cache
     try:
         await get_shared_cache().close()
@@ -71,7 +71,7 @@ app.add_middleware(
 
 
 # ─────────────────────────────────────────────────────
-# Request / Response 模型
+
 # ─────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
@@ -106,13 +106,13 @@ class HealthResponse(BaseModel):
 
 
 # ─────────────────────────────────────────────────────
-# 服务启动时间（用于uptime计算）
+
 # ─────────────────────────────────────────────────────
 _start_time = time.time()
 
 
 # ─────────────────────────────────────────────────────
-# API 接口
+
 # ─────────────────────────────────────────────────────
 
 @app.post("/v1/chat", response_model=ChatResponse)
@@ -160,7 +160,7 @@ async def chat_stream(req: ChatRequest):
     async def event_generator():
         try:
             async for token in agent.run_stream(req.query, req.tenant_id):
-                # SSE格式：data: <token>\n\n
+                
                 yield f"data: {token}\n\n"
             yield "data: [DONE]\n\n"
         except Exception as e:
@@ -172,7 +172,7 @@ async def chat_stream(req: ChatRequest):
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
-            "X-Accel-Buffering": "no",  # Nginx不缓冲SSE
+            "X-Accel-Buffering": "no",  
         },
     )
 
@@ -224,7 +224,7 @@ async def invalidate_cache(use_case: str, tenant_id: str):
 
 
 # ─────────────────────────────────────────────────────
-# 启动入口
+
 # ─────────────────────────────────────────────────────
 if __name__ == "__main__":
     import uvicorn
@@ -232,7 +232,7 @@ if __name__ == "__main__":
         "api.main:app",
         host="0.0.0.0",
         port=8000,
-        workers=4,             # 多进程（CPU密集型任务）
-        loop="uvloop",         # 更快的事件循环
+        workers=4,             
+        loop="uvloop",         
         log_level="info",
     )
