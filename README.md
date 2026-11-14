@@ -1,38 +1,49 @@
 # Enterprise RAG Agent Platform
 
-面向企业场景的 RAG Agent 项目，包含检索、重排、语义缓存和评估模块。
+A RAG agent project with retrieval, reranking, Redis-backed query caching, and evaluation modules.
 
-## 项目结构
+## Project structure
 
-```
+```text
 enterprise_rag_agent/
 ├── agent/
-│   ├── core.py          # Agent基类 + 主流程
-│   └── factory.py       # Agent工厂
+│   ├── core.py           # Agent orchestration
+│   └── factory.py        # Dependency assembly
 ├── retrieval/
-│   ├── pipeline.py      # 异步并行RAG检索流水线
-│   └── reranker.py      # 两阶段Rerank
+│   ├── pipeline.py       # Asynchronous retrieval pipeline
+│   └── reranker.py       # Two-stage reranking
 ├── ingestion/
-│   ├── chunker.py       # Hierarchical分块策略
-│   └── embedder.py      # HyDE embedding优化
+│   ├── chunker.py        # Hierarchical chunking
+│   ├── embedder.py       # Embeddings and HyDE expansion
+│   └── ingest.py         # Document ingestion
 ├── cache/
-│   └── semantic_cache.py # Redis语义缓存
+│   └── semantic_cache.py # Redis exact-match query cache
 ├── llm/
-│   └── client.py        # LLM客户端（连接池+流式）
+│   └── client.py         # Pooled and streaming LLM client
 ├── config/
-│   └── use_cases.py     # 3个业务场景配置
+│   └── use_cases.py      # Three business configurations
 ├── api/
-│   └── main.py          # FastAPI入口
+│   └── main.py          # FastAPI entry point
 ├── evaluation/
-│   └── evaluator.py     # 检索效果评估（幻觉率/相关性）
+│   └── evaluator.py     # Retrieval and answer evaluation
 ├── tests/
-│   └── load_test.py     # Locust并发压测
+│   └── load_test.py     # Locust load testing
 └── requirements.txt
 ```
 
-## 快速启动
+## Starting the API
+
+Install dependencies and configure the API credentials and backing services used by the project before starting the server:
 
 ```bash
 pip install -r requirements.txt
 uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4
 ```
+
+## Implementation notes
+
+- The cache currently uses normalized exact query matching, despite the historical `SemanticCache` name.
+- The sparse/BM25 retrieval branch is a placeholder and must be connected to a backend for real sparse retrieval.
+- The chunking comparison, latency benchmark, and threshold tuning scripts include simulations. Their outputs are not production performance measurements.
+- Load-test latency and concurrency figures are targets to validate in a configured environment.
+- Chinese prompts, sample data, and runtime messages are retained intentionally; translating documentation does not change application behavior.
