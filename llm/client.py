@@ -21,20 +21,20 @@ from openai import AsyncOpenAI, RateLimitError, APIStatusError
 logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────
-# 全局共享HTTP连接池（模块级单例，随进程生命周期）
+
 # ─────────────────────────────────────────────────────
-# 优化前：每次请求 new httpx.AsyncClient() → 每次TCP握手 ~50ms
-# 优化后：复用长连接 → TCP握手延迟消除
+
+
 _SHARED_HTTP_CLIENT = httpx.AsyncClient(
     limits=httpx.Limits(
-        max_connections=100,           # 最大并发连接（对应1000并发用户）
-        max_keepalive_connections=20,  # 保持长连接数
+        max_connections=100,           
+        max_keepalive_connections=20,  
     ),
     timeout=httpx.Timeout(
-        connect=5.0,   # 连接超时
-        read=30.0,     # 读超时（流式场景需要更长）
+        connect=5.0,   
+        read=30.0,     
         write=10.0,
-        pool=5.0,      # 等待连接池超时
+        pool=5.0,      
     ),
 )
 
@@ -58,13 +58,13 @@ class LLMClient:
         self.client = AsyncOpenAI(
             api_key=api_key,
             http_client=_SHARED_HTTP_CLIENT,
-            max_retries=0,  # 自己管理重试逻辑，更细粒度
+            max_retries=0,  
         )
-        # 延迟记录（LLM生成阶段）
+        
         self._latency_records: list[float] = []
 
     # ─────────────────────────────────────────
-    # 非流式生成
+    
     # ─────────────────────────────────────────
     async def generate(
         self,
@@ -99,26 +99,26 @@ class LLMClient:
                 return answer
 
             except RateLimitError as e:
-                wait = 2 ** attempt  # 指数退避：1s, 2s, 4s
+                wait = 2 ** attempt  
                 logger.warning(f"Rate limit hit (attempt {attempt+1}), "
                                f"retrying in {wait}s...")
                 await asyncio.sleep(wait)
                 last_error = e
 
             except APIStatusError as e:
-                if e.status_code >= 500:  # 服务端错误重试
+                if e.status_code >= 500:  
                     wait = 2 ** attempt
                     logger.warning(f"OpenAI 5xx (attempt {attempt+1}), "
                                    f"retrying in {wait}s...")
                     await asyncio.sleep(wait)
                     last_error = e
                 else:
-                    raise  # 4xx不重试
+                    raise  
 
         raise RuntimeError(f"LLM generate failed after {self.max_retries} retries: {last_error}")
 
     # ─────────────────────────────────────────
-    # 流式生成（Server-Sent Events）
+    
     # ─────────────────────────────────────────
     async def stream_generate(
         self,
@@ -155,7 +155,7 @@ class LLMClient:
                     yield token
 
     # ─────────────────────────────────────────
-    # 延迟统计
+    
     # ─────────────────────────────────────────
     def get_latency_stats(self) -> dict:
         if not self._latency_records:
