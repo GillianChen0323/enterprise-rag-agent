@@ -46,4 +46,3 @@ uvicorn api.main:app --host 0.0.0.0 --port 8000 --workers 4
 - The sparse/BM25 retrieval branch is a placeholder and must be connected to a backend for real sparse retrieval.
 - The chunking comparison, latency benchmark, and threshold tuning scripts include simulations. Their outputs are not production performance measurements.
 - Load-test latency and concurrency figures are targets to validate in a configured environment.
-- Chinese prompts, sample data, and runtime messages are retained intentionally; translating documentation does not change application behavior.

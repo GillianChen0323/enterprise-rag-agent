@@ -153,12 +153,12 @@ class EnterpriseRAGAgent:
         With hierarchical chunking, use parent chunk content for broader context.
         """
         if not docs:
-            return "（未检索到相关文档）"
+            return "(No relevant documents retrieved)"
         parts = []
         for i, doc in enumerate(docs, 1):
-            source = doc.metadata.get("source", "未知来源")
+            source = doc.metadata.get("source", "Unknown source")
             page = doc.metadata.get("page", "")
-            header = f"[来源{i}] {source}" + (f" | 第{page}页" if page else "")
+            header = f"[Source{i}] {source}" + (f" | Page {page}" if page else "")
             parts.append(f"{header}\n{doc.page_content}")
         return "\n\n---\n\n".join(parts)
 

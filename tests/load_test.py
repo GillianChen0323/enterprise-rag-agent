@@ -15,37 +15,37 @@ from locust.runners import MasterRunner
 # ─────────────────────────────────────────────────────
 
 KB_QA_QUERIES = [
-    "员工年假政策是什么？",
-    "如何申请报销？",
-    "公司的远程工作政策",
-    "试用期转正标准",
-    "绩效考核流程",
-    "医疗保险覆盖范围",
-    "如何申请内部转岗",
-    "出差补贴标准是多少",
-    "产假和陪产假政策",
-    "IT设备申请流程",
+    "What is the employee annual leave policy?",
+    "How do I request reimbursement?",
+    "Company remote work policy",
+    "Criteria for passing probation",
+    "Performance review process",
+    "Health insurance coverage",
+    "How to apply for an internal transfer",
+    "What are the business travel allowance rates?",
+    "Maternity and paternity leave policy",
+    "IT equipment request process",
 ]
 
 HELPDESK_QUERIES = [
-    "用户无法登录系统怎么处理",
-    "密码重置流程",
-    "VPN连接失败如何排查",
-    "打印机显示离线",
-    "Excel文件打开报错",
-    "邮件无法发送",
-    "会议室预订系统使用说明",
-    "新员工账号开通",
-    "软件安装权限申请",
-    "数据备份在哪里",
+    "How to help a user who cannot log in",
+    "Password reset process",
+    "How to troubleshoot a failed VPN connection",
+    "Printer appears offline",
+    "Error opening an Excel file",
+    "Unable to send email",
+    "Meeting room booking system instructions",
+    "New employee account setup",
+    "Request permission to install software",
+    "Where are the data backups?",
 ]
 
 COMPLIANCE_QUERIES = [
-    "这份合同的保密条款是否合规",
-    "数据处理协议需要哪些必要条款",
-    "GDPR合规检查清单",
-    "合同违约金条款审查",
-    "供应商协议风险评估",
+    "Do the confidentiality clauses in this contract comply with requirements?",
+    "What clauses are required in a data processing agreement?",
+    "GDPR compliance checklist",
+    "Review of contractual penalty clauses",
+    "Supplier agreement risk assessment",
 ]
 
 TENANT_IDS = [f"tenant_{i:03d}" for i in range(10)]  # Ten simulated tenants.

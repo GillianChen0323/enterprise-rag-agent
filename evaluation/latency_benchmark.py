@@ -52,7 +52,7 @@ async def mock_rerank_api(query: str, docs: list) -> list[str]:
 async def mock_llm_generate(messages: list) -> str:
     """Simulate LLM generation latency of approximately 800 to 1400 ms."""
     await asyncio.sleep(random.uniform(0.800, 1.400))
-    return "模拟答案内容"
+    return "Simulated answer content"
 
 
 # ─────────────────────────────────────────────────────
@@ -124,7 +124,7 @@ async def run_benchmark(
     cache_hit_rate: float = 0.30,  # Assume a 30 percent cache hit rate.
 ) -> tuple[BenchmarkResult, BenchmarkResult]:
     """Compare sequential and parallel orchestration."""
-    queries = [f"测试查询{i}：关于公司政策的问题" for i in range(n_requests)]
+    queries = [f"Test query {i}: a question about company policy" for i in range(n_requests)]
 
     # Sequential test.
     print(f"Running serial pipeline ({n_requests} requests)...")
@@ -176,11 +176,11 @@ def print_benchmark_results(serial: BenchmarkResult, parallel: BenchmarkResult):
     print("="*65)
     print(f"\n  P50 improvement: {parallel.improvement_pct:.1f}%  "
           f"({serial.p50_ms:.0f}ms → {parallel.p50_ms:.0f}ms)")
-    print(f"\n  优化手段：")
-    print(f"    1. asyncio.gather 并行 Embed+BM25：节省约 {serial.p50_ms - parallel.p50_ms:.0f}ms")
-    print(f"    2. Redis缓存 30% 命中：直接降低平均延迟")
-    print(f"    3. HTTP连接池复用：消除 TCP握手 ~50ms 开销")
-    print(f"\n  → 这就是简历中'延迟降低20%，P50达到2s'的数据来源。\n")
+    print(f"\n  Optimization techniques:")
+    print(f"    1. Parallel Embed+BM25 with asyncio.gather: approximately {serial.p50_ms - parallel.p50_ms:.0f}ms")
+    print(f"    2. Redis caching with a simulated 30% hit rate: reduces average latency")
+    print(f"    3. HTTP connection pooling: models avoiding approximately 50ms of TCP handshake overhead")
+    print(f"\n  Simulated illustration only; these results do not establish production latency improvements.\n")
 
 
 if __name__ == "__main__":

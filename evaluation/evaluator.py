@@ -137,21 +137,21 @@ class RAGEvaluator:
     ) -> bool:
         """Ask an LLM whether the answer is supported by the context. Return True for an
         answer judged unsupported."""
-        context = "\n\n".join(f"[文档{i+1}]: {t}" for i, t in enumerate(context_texts))
-        prompt = f"""你是一个严格的RAG质量评估员。
+        context = "\n\n".join(f"[Document{i+1}]: {t}" for i, t in enumerate(context_texts))
+        prompt = f"""You are a strict RAG quality evaluator.
 
-问题：{query}
+Question:{query}
 
-检索到的文档：
+Retrieved documents:
 {context}
 
-模型回答：
+Model answer:
 {answer}
 
-请判断：模型回答中的关键信息是否都有上述文档的支撑？
-- 如果回答包含文档中没有的信息（即幻觉），回复：HALLUCINATION
-- 如果回答完全基于文档内容，回复：GROUNDED
-只回复一个词，不要其他内容。"""
+Determine whether all key information in the model answer is supported by the documents above.
+- If the answer contains information absent from the documents (a hallucination), reply: HALLUCINATION
+- If the answer is entirely grounded in the documents, reply: GROUNDED
+Reply with one word only, with no other content."""
 
         resp = await self.judge.chat.completions.create(
             model="gpt-4o-mini",
@@ -167,19 +167,19 @@ class RAGEvaluator:
     # ─────────────────────────────────────────
     async def _judge_relevance(self, query: str, answer: str) -> float:
         """Score answer relevance from 0 to 10 using an LLM and normalize to 0 to 1."""
-        prompt = f"""请评估以下回答对于给定问题的相关性和有用性。
+        prompt = f"""Evaluate the relevance and usefulness of the following answer to the given question.
 
-问题：{query}
-回答：{answer}
+Question:{query}
+Answer:{answer}
 
-评分标准（0-10分）：
-- 10分：完全回答问题，信息准确完整
-- 7-9分：基本回答问题，有少量遗漏
-- 4-6分：部分相关，但不够全面或有偏差
-- 1-3分：回答与问题相关性低
-- 0分：完全不相关或拒绝回答
+Scoring criteria (0-10):
+- 10: Fully answers the question with accurate and complete information
+- 7-9: Mostly answers the question with minor omissions
+- 4-6: Partially relevant but incomplete or inaccurate
+- 1-3: Low relevance to the question
+- 0: Entirely irrelevant or refuses to answer
 
-只回复一个数字（0-10），不要其他内容。"""
+Reply with a single number (0-10), with no other content."""
 
         try:
             resp = await self.judge.chat.completions.create(

@@ -123,7 +123,7 @@ def print_threshold_results(results: list[ThresholdResult]):
     print(f"\n  Baseline (threshold=0.0): hallucination={baseline.hallucination_rate:.1%}")
     print(f"  Best    (threshold={best.threshold:.2f}): hallucination={best_result.hallucination_rate:.1%}")
     print(f"  Improvement: -{improvement_pct:.0f}% hallucination rate")
-    print(f"\n  → 这就是简历中'幻觉率降低31%'的数据来源。\n")
+    print(f"\n  Simulated illustration only; these results do not establish production hallucination reductions.\n")
 
 
 if __name__ == "__main__":

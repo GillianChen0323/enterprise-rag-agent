@@ -62,11 +62,11 @@ KB_QA_CONFIG = AgentConfig(
     use_hyde=True,
     cache_ttl=600,          # Cache stable knowledge-base content longer.
     system_prompt=(
-        "你是企业内部知识库智能助手。"
-        "请严格基于以下检索到的文档内容回答问题，"
-        "每条关键结论必须标注来源（如：[来源1]）。"
-        "若文档中没有相关信息，请明确说明'知识库中暂无此信息'，不要猜测。"
-        "\n\n检索文档：\n{context}"
+        "You are an internal enterprise knowledge-base assistant. "
+        "Answer strictly based on the retrieved documents below. "
+        "Cite the source for every key conclusion (for example, [Source1]). "
+        "If the documents contain no relevant information, state 'This information is not available in the knowledge base.' Do not guess."
+        "\n\nRetrieved documents:\n{context}"
     ),
 )
 
@@ -84,10 +84,10 @@ HELPDESK_CONFIG = AgentConfig(
     cache_ttl=180,           # Short TTL for time-sensitive tickets.
     max_tokens=512,          # Concise support answers.
     system_prompt=(
-        "你是智能客服辅助系统，帮助客服人员快速定位解决方案。"
-        "请给出简洁、可操作的步骤，优先引用历史成功案例。"
-        "回答格式：【问题分类】→【推荐方案】→【参考工单号】"
-        "\n\n参考资料：\n{context}"
+        "You are a support assistant helping customer service staff quickly find solutions. "
+        "Provide concise, actionable steps and prioritize references to previously successful cases. "
+        "Response format: [Issue category] -> [Recommended solution] -> [Reference ticket number]"
+        "\n\nReference material:\n{context}"
     ),
 )
 
@@ -106,11 +106,11 @@ COMPLIANCE_CONFIG = AgentConfig(
     max_tokens=2048,
     temperature=0.0,         # Reduce output variability.
     system_prompt=(
-        "你是企业合规审查助手。"
-        "请逐条分析以下文档中的潜在合规风险，"
-        "对每个风险点标注：【风险等级：高/中/低】【涉及条款】【建议处理方式】。"
-        "严格基于检索到的法规原文进行判断，不得推断。"
-        "\n\n参考法规文档：\n{context}"
+        "You are an enterprise compliance review assistant. "
+        "Analyze potential compliance risks in the following documents one by one. "
+        "For each risk, specify: [Risk level: High/Medium/Low] [Relevant clauses] [Recommended action]. "
+        "Base judgments strictly on the retrieved regulatory text; do not infer unsupported information."
+        "\n\nReference regulatory documents:\n{context}"
     ),
 )
 
@@ -126,7 +126,7 @@ def get_config(use_case: str) -> AgentConfig:
     """Return the configuration for a use-case name; raise ValueError if it is unknown."""
     if use_case not in USE_CASE_REGISTRY:
         raise ValueError(
-            f"未知的use_case: '{use_case}'。"
-            f"支持的场景: {list(USE_CASE_REGISTRY.keys())}"
+            f"Unknown use_case: '{use_case}'; "
+            f"Supported use cases: {list(USE_CASE_REGISTRY.keys())}"
         )
     return USE_CASE_REGISTRY[use_case]

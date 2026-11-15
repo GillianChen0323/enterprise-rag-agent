@@ -53,7 +53,7 @@ async def lifespan(app: FastAPI):
 # ─────────────────────────────────────────────────────
 app = FastAPI(
     title="Enterprise RAG Agent API",
-    description="生产级多场景LLM Agent，支持kb_qa / helpdesk / compliance",
+    description="Multi-use-case LLM agent supporting kb_qa / helpdesk / compliance",
     version="1.0.0",
     lifespan=lifespan,
 )
@@ -71,15 +71,15 @@ app.add_middleware(
 # ─────────────────────────────────────────────────────
 
 class ChatRequest(BaseModel):
-    query: str = Field(..., min_length=1, max_length=2000, description="用户查询")
-    use_case: str = Field(..., description="业务场景: kb_qa | helpdesk | compliance")
-    tenant_id: str = Field(..., description="企业租户ID，用于数据隔离")
-    stream: bool = Field(False, description="是否流式输出")
+    query: str = Field(..., min_length=1, max_length=2000, description="User query")
+    use_case: str = Field(..., description="Use case: kb_qa | helpdesk | compliance")
+    tenant_id: str = Field(..., description="Enterprise tenant ID for data isolation")
+    stream: bool = Field(False, description="Enable streaming output")
 
     class Config:
         json_schema_extra = {
             "example": {
-                "query": "员工年假政策是什么？",
+                "query": "What is the employee annual leave policy?",
                 "use_case": "kb_qa",
                 "tenant_id": "acme_corp",
                 "stream": False,
@@ -118,8 +118,8 @@ async def chat(req: ChatRequest):
     if req.use_case not in _agents:
         raise HTTPException(
             status_code=400,
-            detail=f"不支持的use_case: {req.use_case}。"
-                   f"可用场景: {list(_agents.keys())}"
+            detail=f"Unsupported use_case: {req.use_case}; "
+                   f"Available use cases: {list(_agents.keys())}"
         )
 
     agent = _agents[req.use_case]
@@ -131,7 +131,7 @@ async def chat(req: ChatRequest):
         return ChatResponse(**result)
     except Exception as e:
         logger.error(f"Agent error | use_case={req.use_case} | error={e}")
-        raise HTTPException(status_code=500, detail=f"Agent执行失败: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Agent execution failed: {str(e)}")
 
 
 @app.post("/v1/chat/stream")
@@ -139,7 +139,7 @@ async def chat_stream(req: ChatRequest):
     """SSE streaming chat endpoint for interactive applications. Target time to first
     token: < 500 ms."""
     if req.use_case not in _agents:
-        raise HTTPException(status_code=400, detail=f"不支持的use_case: {req.use_case}")
+        raise HTTPException(status_code=400, detail=f"Unsupported use_case: {req.use_case}")
 
     agent = _agents[req.use_case]
 

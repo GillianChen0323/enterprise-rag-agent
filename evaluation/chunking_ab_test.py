@@ -103,29 +103,29 @@ def run_chunking_experiment(
 def generate_sample_docs(n: int = 20, length: int = 3000) -> list[str]:
     """Generate synthetic enterprise documents with structured paragraphs."""
     topics = [
-        "员工手册第三章：休假制度。\n\n年假政策：入职满一年的员工享有5天带薪年假，"
-        "满三年后增至10天，满十年后增至15天。员工需提前两周申请年假，"
-        "经直属上级批准后方可休假。年假不得跨年累计，当年未休完的年假将自动失效。\n\n"
-        "病假政策：员工因病需要休假时，须提供医院诊断证明。"
-        "连续病假超过3天需提交三甲医院证明。病假期间工资按基本工资的80%发放。\n\n"
-        "事假政策：事假不超过3天可由部门经理审批，超过3天需人力资源部审批。"
-        "事假期间不计发工资。",
+        "Employee handbook, Chapter 3: Leave policy.\n\nAnnual leave policy: employees receive 5 days of paid annual leave after one year of service, "
+        "increasing to 10 days after three years and 15 days after ten years. Employees must apply two weeks in advance, "
+        "and obtain approval from their direct supervisor. Annual leave cannot be carried over; unused leave expires at year-end.\n\n"
+        "Sick leave policy: employees taking sick leave must provide a medical certificate. "
+        "Sick leave exceeding three consecutive days requires a certificate from a tertiary Grade A hospital. Sick leave pay is 80% of base salary.\n\n"
+        "Personal leave policy: up to three days requires department manager approval; longer leave requires HR approval. "
+        "Personal leave is unpaid.",
 
-        "IT支持手册：常见故障排查指南。\n\n"
-        "1. 无法登录企业系统：首先检查网络连接，确认VPN已连接。"
-        "如问题持续，请联系IT帮助台重置密码。\n\n"
-        "2. VPN连接失败：检查VPN客户端版本，确保使用最新版本。"
-        "尝试切换服务器节点。如仍无法连接，请提交工单。\n\n"
-        "3. 邮件发送失败：检查收件人地址格式，确认附件大小不超过25MB。"
-        "清除邮件客户端缓存后重试。",
+        "IT support handbook: common troubleshooting guide.\n\n"
+        "1. Cannot log into enterprise systems: first check the network connection and confirm the VPN is connected. "
+        "If the issue persists, contact the IT helpdesk to reset the password.\n\n"
+        "2. VPN connection failure: check the VPN client version and ensure it is up to date. "
+        "Try another server. If the connection still fails, submit a support ticket.\n\n"
+        "3. Email delivery failure: check the recipient address format and ensure attachments do not exceed 25MB. "
+        "Clear the email client cache and retry.",
 
-        "合同审查标准：保密协议条款规范。\n\n"
-        "根据《中华人民共和国合同法》第四十条规定，保密协议中的保密期限应明确约定。"
-        "建议保密期限不超过3年，超过此期限的条款可能被认定为显失公平。\n\n"
-        "竞业禁止条款：竞业禁止期限一般不超过2年，"
-        "且企业需支付相应的经济补偿（通常为离职前12个月平均工资的30%以上）。\n\n"
-        "违约金条款：违约金金额应与实际损失相当，"
-        "过高的违约金条款可能被法院酌情调整。",
+        "Fictional contract review sample (not legal guidance): confidentiality clauses.\n\n"
+        "This sample requires confidentiality agreements to specify a confidentiality period. "
+        "The sample recommends a period of no more than three years and treats longer periods as potentially unfair.\n\n"
+        "Sample non-compete clause: the restriction generally lasts no more than two years, "
+        "with compensation of at least 30% of average salary over the preceding twelve months.\n\n"
+        "Sample penalty clause: the penalty should correspond to actual losses; "
+        "excessive penalties may be adjusted by a court.",
     ]
 
     docs = []
@@ -133,7 +133,7 @@ def generate_sample_docs(n: int = 20, length: int = 3000) -> list[str]:
         base = topics[i % len(topics)]
         # Randomize synthetic document length.
         padding = " ".join(
-            f"附加条款{j}：相关规定参见公司内部管理制度第{random.randint(1,50)}条。"
+            f"Additional clause {j}: refer to section {random.randint(1,50)} of the internal company policies."
             for j in range(length // 100)
         )
         docs.append(base + "\n\n" + padding)
@@ -157,7 +157,7 @@ def print_experiment_results(results: list[ChunkingExperimentResult]):
             pct = (r.simulated_recall - baseline_recall) / baseline_recall * 100
             improvement = f"+{pct:.0f}%" if pct > 0 else f"{pct:.0f}%"
 
-        marker = " ← 最终选择" if r.strategy == "hierarchical" else ""
+        marker = " <- hierarchical example" if r.strategy == "hierarchical" else ""
         print(f"  {r.strategy:<20} {r.simulated_recall:>10.3f} "
               f"{r.avg_n_chunks:>12.1f} {r.avg_chunk_len:>10.0f}  "
               f"({improvement}){marker}")
@@ -167,7 +167,7 @@ def print_experiment_results(results: list[ChunkingExperimentResult]):
 if __name__ == "__main__":
     print("Generating sample enterprise documents...")
     sample_docs = generate_sample_docs(n=20)
-    query_keywords = ["年假", "政策", "员工", "申请", "审批"]
+    query_keywords = ["annual leave", "policy", "employee", "apply", "approval"]
 
     print("Running A/B test across chunking strategies...")
     results = run_chunking_experiment(
@@ -177,5 +177,5 @@ if __name__ == "__main__":
     )
 
     print_experiment_results(results)
-    print("结论：Hierarchical分块在Recall@5上表现最优，")
-    print("      子chunk精准检索 + 父chunk完整上下文，是最终生产方案。\n")
+    print("Compare the simulated Recall@5 scores above.")
+    print("      Hierarchical chunking combines child retrieval with parent context; validate on real data before production use.\n")

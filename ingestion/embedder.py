@@ -68,7 +68,7 @@ class DomainEmbedder:
         hypothesis = await self._generate_hypothesis(query)
 
         # Combine query and hypothetical answer.
-        enriched_input = f"问题：{query}\n\n参考答案：{hypothesis}"
+        enriched_input = f"Question:{query}\n\nReference answer:{hypothesis}"
 
         # Embed combined text.
         resp = await self.client.embeddings.create(
@@ -87,7 +87,7 @@ class DomainEmbedder:
             messages=[{
                 "role": "user",
                 "content": (
-                    f"请用2-3句话简短回答以下问题（仅用于搜索优化，不需要准确）：\n{query}"
+                    f"Briefly answer the following question in 2-3 sentences (for search optimization only; accuracy is not required):\n{query}"
                 )
             }],
             max_tokens=self.hyde_max_tokens,
