@@ -159,7 +159,7 @@ def print_experiment_results(results: list[ChunkingExperimentResult]):
 
         marker = " <- hierarchical example" if r.strategy == "hierarchical" else ""
         print(f"  {r.strategy:<20} {r.simulated_recall:>10.3f} "
-              f"{r.avg_n_chunks:>12.1f} {r.avg_chunk_len:>10.0f}  "
+              f"{r.n_chunks:>12.1f} {r.avg_chunk_len:>10.0f}  "
               f"({improvement}){marker}")
     print("="*65 + "\n")
 
